@@ -10,6 +10,7 @@ IntDB是一个面向带内网络遥测的时空数据库。
 | **🛠️ Linux部署** | [LINUX_DEPLOYMENT.md](./LINUX_DEPLOYMENT.md) | Ubuntu/CentOS环境部署 |
 | **🍎 macOS部署** | [MACOS_DEPLOYMENT.md](./MACOS_DEPLOYMENT.md) | macOS环境搭建 |
 | **🐳 Docker部署** | [docker-compose.yml](./docker-compose.yml) | 容器化一键部署 |
+| **📊 性能测试** | [PerformanceTestResult.md](./PerformanceTestResult.md) | 与InfluxDB的性能对比测试 |
 | **💻 API示例** | [examples/](./examples/) | 代码示例和演示 |
 
 ## 设计理念与定位
