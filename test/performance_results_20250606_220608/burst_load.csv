@@ -1,0 +1,7 @@
+phase,database,transactions,availability,response_time,qps,failed_transactions,max_latency
+low,IntDB,15572,100.00,1.84,742.58,0,6900.00
+low,InfluxDB,15621,100.00,7.16,752.09,0,8520.00
+burst,IntDB,16307,100.00,21.61,781.74,0,7950.00
+burst,InfluxDB,16000,100.00,25.25,766.28,0,6730.00
+recovery,IntDB,16251,100.00,2.88,778.30,0,8300.00
+recovery,InfluxDB,15864,100.00,2.42,759.77,0,10850.00

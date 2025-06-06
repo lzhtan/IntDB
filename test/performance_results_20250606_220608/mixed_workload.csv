@@ -1,0 +1,3 @@
+workload,database,transactions,availability,response_time,qps,failed_transactions,max_latency
+mixed,IntDB,32491,99.87,16.56,533.60,42,19520.00
+mixed,InfluxDB,32525,99.87,15.09,535.30,43,19510.00

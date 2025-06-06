@@ -1,0 +1,5 @@
+endpoint,database,transactions,availability,response_time,qps,failed_transactions,max_latency
+/health,IntDB,16246,99.92,6.07,530.92,13,8420.00
+/flows/test_flow_1,IntDB,16250,99.93,6.14,526.57,12,13110.00
+/ping,InfluxDB,16257,99.91,3.70,526.29,15,6720.00
+/health,InfluxDB,16245,99.94,8.13,525.73,10,13110.00
