@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  intdb:
+    build: .
+    image: intdb:latest
+    container_name: intdb-server
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # 数据持久化
+      - intdb_data:/opt/intdb/data
+      - intdb_logs:/opt/intdb/logs
+    environment:
+      - RUST_LOG=info
+      - INTDB_BIND=0.0.0.0:3000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - intdb-network
+
+  # 可选: Nginx反向代理
+  nginx:
+    image: nginx:alpine
+    container_name: intdb-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - intdb
+    networks:
+      - intdb-network
+
+  # 可选: Prometheus监控
+  prometheus:
+    image: prom/prometheus
+    container_name: intdb-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - intdb-network
+
+  # 可选: Grafana可视化
+  grafana:
+    image: grafana/grafana
+    container_name: intdb-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+    networks:
+      - intdb-network
+
+volumes:
+  intdb_data:
+    driver: local
+  intdb_logs:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  intdb-network:
+    driver: bridge 
