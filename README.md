@@ -167,21 +167,65 @@ Raw Hops → Parsed Hops → Complete Flows → Indexed → Persisted
 
 ## 部署与使用
 
-### 快速开始
-```bash
-# 安装IntDB
-curl -sSL https://github.com/example/intdb/install.sh | bash
+### Linux环境快速部署
 
-# 启动服务
-intdb server --config /etc/intdb/config.toml
+#### 方法1：Docker部署（推荐）
+```bash
+# 克隆项目
+git clone https://github.com/lzhtan/IntDB.git
+cd IntDB
+
+# Docker Compose启动（包含监控栈）
+docker-compose up -d
+
+# 验证服务
+curl http://localhost:3000/health
+```
+
+#### 方法2：编译部署
+```bash
+# 1. 安装Rust（如果未安装）
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+
+# 2. 克隆项目
+git clone https://github.com/lzhtan/IntDB.git
+cd IntDB
+
+# 3. 编译
+cargo build --release
+
+# 4. 启动服务
+./target/release/examples/api_server
+```
+
+#### 方法3：自动化安装脚本
+```bash
+# Ubuntu/Debian/CentOS/RHEL支持
+sudo bash deploy/install.sh
+
+# 启动systemd服务
+sudo systemctl start intdb
+sudo systemctl enable intdb
+```
+
+### API使用示例
+```bash
+# 健康检查
+curl http://localhost:3000/health
 
 # 写入INT数据
-curl -XPOST 'http://localhost:8086/write' \
-  --data-binary @int_data.json
+curl -X POST http://localhost:3000/flows \
+  -H 'Content-Type: application/json' \
+  -d '{"flow": {"path": ["s1", "s2", "s3"], "hops": [...]}}'
 
-# 查询路径数据
-curl -XPOST 'http://localhost:8086/query' \
-  --data 'SELECT * FROM flows WHERE path_contains(["s1", "s2"])'
+# 查询流数据
+curl http://localhost:3000/flows/test_flow_1
+
+# 高级查询
+curl -X POST http://localhost:3000/query \
+  -H 'Content-Type: application/json' \
+  -d '{"path_conditions": [{"contains": ["s1", "s2"]}]}'
 ```
 
 ### 配置示例
@@ -253,63 +297,59 @@ SELECT mean(delay) FROM telemetry WHERE time > now() - 1h
 
 ## 技术栈选择
 
-- **存储引擎**: 基于成熟LSM树引擎，添加路径语义
-- **实现语言**: Rust(核心引擎) + Go(API层)  
-- **索引系统**: 多维索引，支持路径和时间查询
-- **压缩算法**: 针对路径数据优化的压缩方案
+- **实现语言**: Rust（完整实现，包含核心引擎和API层）
+- **存储引擎**: 自定义存储引擎，专门针对路径时序数据优化
+- **异步运行时**: Tokio（高性能异步I/O）
+- **HTTP框架**: Axum（快速、安全的Web框架）
+- **索引系统**: 多维索引（路径前缀树、时间B+树、指标范围树）
+- **序列化**: Serde（类型安全的JSON处理）
 - **查询引擎**: 路径感知的查询优化器
 
-## 开发路线图
 
-### Phase 1: MVP验证 (3个月)
-- [ ] 基础存储引擎实现
-- [ ] 路径索引和查询支持
-- [ ] InfluxDB Line Protocol兼容
-- [ ] 基本性能测试
+## 项目状态
 
-### Phase 2: 性能优化 (3个月)  
-- [ ] 实时流式写入优化
-- [ ] 查询性能调优
-- [ ] 压缩算法优化
-- [ ] 内存管理改进
+### 🎉 IntDB v0.1.0 已发布
 
-### Phase 3: 生产就绪 (6个月)
-- [ ] 高可用和集群支持
-- [ ] 监控和运维工具
-- [ ] 生态系统集成
-- [ ] 详细文档和教程
+**核心功能完成度**：
+- ✅ INT数据模型（Flow、Hop、TelemetryMetrics、NetworkPath）
+- ✅ 存储引擎（PathIndex、TimeIndex、StorageEngine）
+- ✅ 查询系统（路径查询、时间查询、指标过滤、复合查询）
+- ✅ HTTP RESTful API（健康检查、CRUD、高级查询）
+- ✅ Linux部署支持（Docker、systemd、自动安装脚本）
+- ✅ 测试验证（28个单元测试全部通过）
 
-### Phase 4: 高级特性 (持续)
-- [ ] 机器学习集成
-- [ ] 实时异常检测
-- [ ] 自动调优系统
-- [ ] 高级分析功能
+**生产就绪性**：适用于开发和测试环境，具备完整的INT数据管理能力。
 
-
-## 贡献指南
+## 开发贡献
 
 ### 参与开发
 ```bash
 # 克隆项目
-git clone https://github.com/example/intdb.git
-cd intdb
+git clone https://github.com/lzhtan/IntDB.git
+cd IntDB
 
 # 构建项目
-make build
+cargo build
 
 # 运行测试
-make test
+cargo test
 
-# 启动开发环境
-make dev
+# 启动开发服务器
+cargo run --example test_api_server
 ```
 
+### 代码贡献
+1. Fork本仓库
+2. 创建功能分支：`git checkout -b feature/your-feature`
+3. 提交代码：`git commit -am 'Add some feature'`
+4. 推送分支：`git push origin feature/your-feature`
+5. 提交Pull Request
+
 ### 社区
-- 📧 邮件列表: intdb-dev@googlegroups.com
-- 💬 讨论区: https://github.com/example/intdb/discussions
-- 🐛 问题反馈: https://github.com/example/intdb/issues
-- 📖 文档: https://docs.intdb.org
+- 🐛 问题反馈：[GitHub Issues](https://github.com/lzhtan/IntDB/issues)
+- 💬 功能讨论：[GitHub Discussions](https://github.com/lzhtan/IntDB/discussions)
+- 📖 部署文档：[DEPLOYMENT.md](./DEPLOYMENT.md)
 
 ---
 
-**IntDB的价值在于填补网络遥测领域的技术空白，而非替代成熟的通用时序数据库。**
+**IntDB v0.1.0：专为网络遥测设计的时空数据库，填补INT数据管理的技术空白。**
