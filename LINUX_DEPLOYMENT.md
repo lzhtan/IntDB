@@ -40,7 +40,7 @@ cargo --version
 
 **如果您有GitHub仓库：**
 ```bash
-git clone https://github.com/YOUR_USERNAME/IntDB.git
+git clone https://github.com/lzhtan/IntDB.git
 cd IntDB
 ```
 

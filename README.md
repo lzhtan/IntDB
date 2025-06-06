@@ -1,6 +1,17 @@
 # IntDB
 IntDB是一个面向带内网络遥测的时空数据库。
 
+> 🚀 **快速部署**：[Linux服务器部署](./LINUX_DEPLOYMENT.md) | [macOS本地开发](./MACOS_DEPLOYMENT.md)
+
+## 📖 文档导航
+
+| 内容 | 链接 | 说明 |
+|------|------|------|
+| **🛠️ Linux部署** | [LINUX_DEPLOYMENT.md](./LINUX_DEPLOYMENT.md) | Ubuntu/CentOS环境部署 |
+| **🍎 macOS部署** | [MACOS_DEPLOYMENT.md](./MACOS_DEPLOYMENT.md) | macOS环境搭建 |
+| **🐳 Docker部署** | [docker-compose.yml](./docker-compose.yml) | 容器化一键部署 |
+| **💻 API示例** | [examples/](./examples/) | 代码示例和演示 |
+
 ## 设计理念与定位
 
 IntDB**不是**传统时序数据库的替代品，而是专门为**带内网络遥测**场景设计的时空数据库。我们的核心理念是：
@@ -167,106 +178,131 @@ Raw Hops → Parsed Hops → Complete Flows → Indexed → Persisted
 
 ## 部署与使用
 
-### Linux环境快速部署
+### 🚀 快速开始
 
-#### 方法1：Docker部署（推荐）
+IntDB支持多平台部署，请根据您的操作系统选择对应的部署指南：
+
+#### 📖 平台专用部署指南
+
+| 平台 | 部署指南 | 推荐方法 |
+|------|----------|----------|
+| **🐧 Linux** | [📋 LINUX_DEPLOYMENT.md](./LINUX_DEPLOYMENT.md) | Docker部署、自动安装脚本 |
+| **🍎 macOS** | [📋 MACOS_DEPLOYMENT.md](./MACOS_DEPLOYMENT.md) | 直接编译、Docker运行 |
+| **🪟 Windows** | 即将支持 | WSL + Linux方法 |
+
+#### ⚡ 一分钟快速体验
+
 ```bash
-# 克隆项目
+# 1. 克隆项目
 git clone https://github.com/lzhtan/IntDB.git
 cd IntDB
 
-# Docker Compose启动（包含监控栈）
-docker-compose up -d
+# 2. 启动测试服务器
+cargo run --example test_api_server
 
-# 验证服务
-curl http://localhost:3000/health
+# 3. 验证运行（新开终端）
+curl http://127.0.0.1:3000/health
 ```
 
-#### 方法2：编译部署
-```bash
-# 1. 安装Rust（如果未安装）
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
+### 🔧 API使用示例
 
-# 2. 克隆项目
-git clone https://github.com/lzhtan/IntDB.git
-cd IntDB
-
-# 3. 编译
-cargo build --release
-
-# 4. 启动服务
-./target/release/examples/api_server
-```
-
-#### 方法3：自动化安装脚本
-```bash
-# Ubuntu/Debian/CentOS/RHEL支持
-sudo bash deploy/install.sh
-
-# 启动systemd服务
-sudo systemctl start intdb
-sudo systemctl enable intdb
-```
-
-### API使用示例
+#### 基础操作
 ```bash
 # 健康检查
-curl http://localhost:3000/health
+curl http://127.0.0.1:3000/health
+# 响应: {"status":"healthy","version":"0.1.0","uptime_seconds":5,"flow_count":3}
 
-# 写入INT数据
-curl -X POST http://localhost:3000/flows \
+# 获取统计信息  
+curl http://127.0.0.1:3000/stats
+
+# 查询特定流
+curl http://127.0.0.1:3000/flows/test_flow_1
+```
+
+#### 数据写入
+```bash
+curl -X POST http://127.0.0.1:3000/flows \
   -H 'Content-Type: application/json' \
-  -d '{"flow": {"path": ["s1", "s2", "s3"], "hops": [...]}}'
+  -d '{
+    "flow": {
+      "path": ["s1", "s2", "s3"],
+      "hops": [
+        {
+          "hop_index": 0,
+          "switch_id": "s1", 
+          "timestamp": "2025-06-06T10:00:00Z",
+          "metrics": {
+            "queue_util": 0.8,
+            "delay_ns": 200,
+            "bandwidth_bps": 1000
+          }
+        }
+      ]
+    }
+  }'
+```
 
-# 查询流数据
-curl http://localhost:3000/flows/test_flow_1
-
-# 高级查询
-curl -X POST http://localhost:3000/query \
+#### 高级查询
+```bash
+# 路径查询
+curl -X POST http://127.0.0.1:3000/query \
   -H 'Content-Type: application/json' \
   -d '{"path_conditions": [{"contains": ["s1", "s2"]}]}'
+
+# 时间范围查询
+curl -X POST http://127.0.0.1:3000/query \
+  -H 'Content-Type: application/json' \
+  -d '{"time_conditions": [{"after": "2025-01-01T00:00:00Z"}]}'
+
+# 复合条件查询
+curl -X POST http://127.0.0.1:3000/query \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "path_conditions": [{"through_switch": "s2"}],
+    "metric_conditions": [{"total_delay_greater_than": 500}],
+    "limit": 10
+  }'
 ```
 
 ### 配置示例
+
+当前v0.1.0版本使用内存存储，以下为未来版本的配置规划：
+
 ```toml
-# /etc/intdb/config.toml
+# 未来版本配置示例
 [server]
-bind = "127.0.0.1:8086"
+bind = "127.0.0.1:3000"  # 当前默认端口
 log_level = "info"
 
 [storage]
-data_dir = "/var/lib/intdb"
-wal_dir = "/var/lib/intdb/wal"
-memory_limit = "8GB"
+# v0.1.0: 纯内存存储，以下为未来规划
+data_dir = "/var/lib/intdb"      # 持久化数据目录
+wal_dir = "/var/lib/intdb/wal"   # 写前日志目录
+memory_limit = "8GB"             # 内存使用限制
 
 [indexing]
+# v0.1.0: 内存索引，以下为未来优化
 path_index_cache = "1GB"
 time_index_cache = "512MB"
 enable_adaptive_indexing = true
 
 [performance]
-batch_size = 10000
-flush_interval = "5s"
-compression = "snappy"
+max_flows = 1000000              # 当前支持：最大流数量
+auto_cleanup_hours = 24          # 当前支持：自动清理
 ```
 
-## 兼容性策略
+## 生态系统集成
 
-### 平滑迁移支持
-```bash
-# 支持InfluxDB Line Protocol写入
-curl -XPOST 'http://localhost:8086/write?db=intdb' \
-  --data-binary 'telemetry,flow=123,switch=s1 delay=500,queue_util=0.8'
+### 当前集成状态
+- ✅ **HTTP RESTful API**: 标准化接口，易于集成
+- ✅ **JSON数据格式**: 通用格式，工具链友好
+- ✅ **Docker支持**: 容器化部署，云原生兼容
 
-# 提供InfluxQL兼容查询
-SELECT mean(delay) FROM telemetry WHERE time > now() - 1h
-```
-
-### 生态系统集成
-- **Telegraf适配器**: 复用现有数据收集工具
-- **Grafana插件**: 可视化INT数据和路径分析
-- **InfluxDB数据桥接**: 与现有TSDB协作部署
+### 未来兼容性规划
+- 🔄 **InfluxDB Line Protocol**: 平滑迁移现有监控数据
+- 🔄 **Grafana插件**: 专门的INT数据可视化
+- 🔄 **Telegraf适配器**: 复用现有数据收集工具
+- 🔄 **Prometheus集成**: 指标暴露和监控
 
 ## 性能预期
 
@@ -328,14 +364,15 @@ SELECT mean(delay) FROM telemetry WHERE time > now() - 1h
 git clone https://github.com/lzhtan/IntDB.git
 cd IntDB
 
-# 构建项目
-cargo build
-
 # 运行测试
 cargo test
 
-# 启动开发服务器
+# 启动开发服务器（包含测试数据）
 cargo run --example test_api_server
+
+# 代码检查和修复
+cargo clippy
+cargo fmt
 ```
 
 ### 代码贡献
@@ -348,8 +385,8 @@ cargo run --example test_api_server
 ### 社区
 - 🐛 问题反馈：[GitHub Issues](https://github.com/lzhtan/IntDB/issues)
 - 💬 功能讨论：[GitHub Discussions](https://github.com/lzhtan/IntDB/discussions)
-- 📖 部署文档：[DEPLOYMENT.md](./DEPLOYMENT.md)
+- 📖 部署文档：[Linux部署](./LINUX_DEPLOYMENT.md) | [macOS部署](./MACOS_DEPLOYMENT.md)
 
 ---
 
-**IntDB v0.1.0：专为网络遥测设计的时空数据库，填补INT数据管理的技术空白。**
+**IntDB：专为网络遥测设计的时空数据库。**
