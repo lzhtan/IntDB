@@ -349,6 +349,56 @@ impl StorageEngine {
         let flows = self.flows.read().unwrap();
         flows.len()
     }
+    
+    /// Estimate memory usage in bytes
+    pub fn estimate_memory_usage(&self) -> usize {
+        let flows = self.flows.read().unwrap();
+        let path_index = self.path_index.read().unwrap();
+        let time_index = self.time_index.read().unwrap();
+        
+        let mut total_bytes = 0;
+        
+        // Estimate flows memory usage
+        for flow in flows.values() {
+            total_bytes += self.estimate_flow_memory(flow);
+        }
+        
+        // Estimate indexes memory usage (rough approximation)
+        // Path index: assume each switch ID takes ~20 bytes + overhead
+        total_bytes += path_index.estimated_size_bytes();
+        
+        // Time index: assume each bucket takes ~50 bytes + overhead  
+        total_bytes += time_index.estimated_size_bytes();
+        
+        total_bytes
+    }
+    
+    /// Estimate memory usage for a single flow
+    fn estimate_flow_memory(&self, flow: &Flow) -> usize {
+        let mut bytes = 0;
+        
+        // Flow ID string
+        bytes += flow.flow_id.len();
+        
+        // Path switches 
+        for switch in &flow.path.switches {
+            bytes += switch.len(); // switch_id string
+        }
+        bytes += flow.path.switches.len() * 8; // Vec overhead
+        
+        // Hops
+        for hop in &flow.hops {
+            bytes += hop.switch_id.len(); // switch_id string
+            bytes += 32; // hop_index (4) + timestamp (8) + struct overhead (~20)
+            bytes += 24; // TelemetryMetrics (3 fields × 8 bytes each)
+        }
+        bytes += flow.hops.len() * 8; // Vec overhead
+        
+        // Timestamps and other fields
+        bytes += 32; // start_time + end_time + struct overhead
+        
+        bytes
+    }
 }
 
 impl Default for StorageEngine {

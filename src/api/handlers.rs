@@ -64,7 +64,7 @@ pub async fn get_stats(State(state): State<AppState>) -> ApiResult<Json<StatsRes
         unique_paths: 0, // Would need to implement this
         unique_switches: 0, // Would need to implement this  
         time_buckets: 0, // Would need to implement this
-        memory_usage_estimate: state.engine.flow_count() * 1024, // Rough estimate
+        memory_usage_estimate: state.engine.estimate_memory_usage(),
     };
     
     Ok(Json(response))

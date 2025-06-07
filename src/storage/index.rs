@@ -159,6 +159,34 @@ impl PathIndex {
             total_flow_refs: self.exact_paths.values().map(|s| s.len()).sum(),
         }
     }
+    
+    /// Estimate memory usage in bytes
+    pub fn estimated_size_bytes(&self) -> usize {
+        let mut bytes = 0;
+        
+        // Exact paths HashMap
+        for (path_hash, flow_ids) in &self.exact_paths {
+            bytes += path_hash.len(); // key string
+            bytes += flow_ids.len() * 24; // BTreeSet entries (~24 bytes per flow_id)
+            bytes += 32; // HashMap entry overhead
+        }
+        
+        // Switch flows HashMap  
+        for (switch_id, flow_ids) in &self.switch_flows {
+            bytes += switch_id.len(); // key string
+            bytes += flow_ids.len() * 24; // BTreeSet entries
+            bytes += 32; // HashMap entry overhead
+        }
+        
+        // Prefix index HashMap
+        for (prefix, flow_ids) in &self.prefix_index {
+            bytes += prefix.len(); // key string
+            bytes += flow_ids.len() * 24; // BTreeSet entries
+            bytes += 32; // HashMap entry overhead
+        }
+        
+        bytes
+    }
 }
 
 impl Default for PathIndex {
@@ -291,6 +319,23 @@ impl TimeIndex {
             latest_time: self.latest_time(),
             total_flow_refs: self.time_buckets.values().map(|s| s.len()).sum(),
         }
+    }
+    
+    /// Estimate memory usage in bytes
+    pub fn estimated_size_bytes(&self) -> usize {
+        let mut bytes = 0;
+        
+        // Time buckets BTreeMap
+        for (timestamp, flow_ids) in &self.time_buckets {
+            bytes += 16; // DateTime<Utc> is ~16 bytes
+            bytes += flow_ids.len() * 24; // BTreeSet entries (~24 bytes per flow_id)
+            bytes += 24; // BTreeMap entry overhead
+        }
+        
+        // Bucket size field
+        bytes += 8; // i64
+        
+        bytes
     }
 }
 
