@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::models::{Flow, SpatiotemporalFlow};
 use crate::storage::{StorageEngine, QueryBuilder, TimeCondition};
@@ -630,6 +630,9 @@ pub async fn prometheus_query(
         .map_err(|e| ApiError::internal(format!("Time error: {}", e)))?
         .as_secs();
     
+    // Calculate network metrics from actual flow data
+    let network_metrics = calculate_network_metrics(&state);
+    
     // Parse basic Prometheus queries and return real data
     match query.as_str() {
         "intdb_flows_total" => {
@@ -688,6 +691,163 @@ pub async fn prometheus_query(
                 }
             })))
         },
+        "intdb_avg_delay_ns" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_avg_delay_ns"},
+                            "value": [chrono::Utc::now().timestamp(), network_metrics.avg_delay.to_string()]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_max_delay_ns" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_max_delay_ns"},
+                            "value": [chrono::Utc::now().timestamp(), network_metrics.max_delay.to_string()]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_avg_queue_utilization" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_avg_queue_utilization"},
+                            "value": [chrono::Utc::now().timestamp(), network_metrics.avg_queue_util.to_string()]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_max_queue_utilization" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_max_queue_utilization"},
+                            "value": [chrono::Utc::now().timestamp(), network_metrics.max_queue_util.to_string()]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_queue_congestion_ratio" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_queue_congestion_ratio"},
+                            "value": [chrono::Utc::now().timestamp(), network_metrics.congestion_ratio.to_string()]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_unique_switches" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_unique_switches"},
+                            "value": [chrono::Utc::now().timestamp(), network_metrics.unique_switches.to_string()]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_unique_paths" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_unique_paths"},
+                            "value": [chrono::Utc::now().timestamp(), network_metrics.unique_paths.to_string()]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_avg_path_length" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_avg_path_length"},
+                            "value": [chrono::Utc::now().timestamp(), network_metrics.avg_path_length.to_string()]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_flows_active" => {
+            // For now, assume all flows are active (would need flow state tracking)
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_flows_active"},
+                            "value": [chrono::Utc::now().timestamp(), flow_count.to_string()]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_flows_complete" => {
+            // For now, return 0 (would need flow state tracking)
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_flows_complete"},
+                            "value": [chrono::Utc::now().timestamp(), "0"]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_flows_timeout" => {
+            // For now, return 0 (would need flow state tracking)
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_flows_timeout"},
+                            "value": [chrono::Utc::now().timestamp(), "0"]
+                        }
+                    ]
+                }
+            })))
+        },
         _ => {
             // Return empty result for unknown queries
             Ok(Json(serde_json::json!({
@@ -714,6 +874,9 @@ pub async fn prometheus_query_range(
         .elapsed()
         .map_err(|e| ApiError::internal(format!("Time error: {}", e)))?
         .as_secs();
+    
+    // Calculate network metrics from actual flow data
+    let network_metrics = calculate_network_metrics(&state);
     
     // Generate time series data for the range query
     let current_timestamp = chrono::Utc::now().timestamp();
@@ -788,6 +951,193 @@ pub async fn prometheus_query_range(
                 }
             })))
         },
+        "intdb_avg_delay_ns" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "matrix",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_avg_delay_ns"},
+                            "values": [
+                                [current_timestamp - 60, network_metrics.avg_delay.to_string()],
+                                [current_timestamp, network_metrics.avg_delay.to_string()]
+                            ]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_max_delay_ns" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "matrix",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_max_delay_ns"},
+                            "values": [
+                                [current_timestamp - 60, network_metrics.max_delay.to_string()],
+                                [current_timestamp, network_metrics.max_delay.to_string()]
+                            ]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_avg_queue_utilization" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "matrix",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_avg_queue_utilization"},
+                            "values": [
+                                [current_timestamp - 60, network_metrics.avg_queue_util.to_string()],
+                                [current_timestamp, network_metrics.avg_queue_util.to_string()]
+                            ]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_max_queue_utilization" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "matrix",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_max_queue_utilization"},
+                            "values": [
+                                [current_timestamp - 60, network_metrics.max_queue_util.to_string()],
+                                [current_timestamp, network_metrics.max_queue_util.to_string()]
+                            ]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_queue_congestion_ratio" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "matrix",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_queue_congestion_ratio"},
+                            "values": [
+                                [current_timestamp - 60, network_metrics.congestion_ratio.to_string()],
+                                [current_timestamp, network_metrics.congestion_ratio.to_string()]
+                            ]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_unique_switches" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "matrix",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_unique_switches"},
+                            "values": [
+                                [current_timestamp - 60, network_metrics.unique_switches.to_string()],
+                                [current_timestamp, network_metrics.unique_switches.to_string()]
+                            ]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_unique_paths" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "matrix",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_unique_paths"},
+                            "values": [
+                                [current_timestamp - 60, network_metrics.unique_paths.to_string()],
+                                [current_timestamp, network_metrics.unique_paths.to_string()]
+                            ]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_avg_path_length" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "matrix",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_avg_path_length"},
+                            "values": [
+                                [current_timestamp - 60, network_metrics.avg_path_length.to_string()],
+                                [current_timestamp, network_metrics.avg_path_length.to_string()]
+                            ]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_flows_active" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "matrix",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_flows_active"},
+                            "values": [
+                                [current_timestamp - 60, flow_count.to_string()],
+                                [current_timestamp, flow_count.to_string()]
+                            ]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_flows_complete" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "matrix",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_flows_complete"},
+                            "values": [
+                                [current_timestamp - 60, "0"],
+                                [current_timestamp, "0"]
+                            ]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_flows_timeout" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "matrix",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_flows_timeout"},
+                            "values": [
+                                [current_timestamp - 60, "0"],
+                                [current_timestamp, "0"]
+                            ]
+                        }
+                    ]
+                }
+            })))
+        },
         _ => {
             // Return empty result for unknown queries
             Ok(Json(serde_json::json!({
@@ -812,7 +1162,18 @@ pub async fn prometheus_label_values(
             "intdb_flows_total",
             "intdb_uptime_seconds", 
             "intdb_memory_usage_estimate_bytes",
-            "intdb_api_health"
+            "intdb_api_health",
+            "intdb_avg_delay_ns",
+            "intdb_max_delay_ns",
+            "intdb_avg_queue_utilization",
+            "intdb_max_queue_utilization",
+            "intdb_queue_congestion_ratio",
+            "intdb_unique_switches",
+            "intdb_unique_paths",
+            "intdb_avg_path_length",
+            "intdb_flows_active",
+            "intdb_flows_complete",
+            "intdb_flows_timeout"
         ]
     })))
 }
@@ -826,4 +1187,113 @@ pub async fn prometheus_labels(
         "status": "success",
         "data": ["__name__"]
     })))
+}
+
+/// Network metrics calculated from flow data
+#[derive(Debug, Clone)]
+struct NetworkMetrics {
+    avg_delay: f64,
+    max_delay: i32,
+    avg_queue_util: f64,
+    max_queue_util: f64,
+    congestion_ratio: f64,
+    unique_switches: usize,
+    unique_paths: usize,
+    avg_path_length: f64,
+}
+
+/// Calculate network metrics from all flows in the system
+fn calculate_network_metrics(state: &AppState) -> NetworkMetrics {
+    // Get all flows
+    let flow_count = state.engine.flow_count();
+    
+    if flow_count == 0 {
+        return NetworkMetrics {
+            avg_delay: 0.0,
+            max_delay: 0,
+            avg_queue_util: 0.0,
+            max_queue_util: 0.0,
+            congestion_ratio: 0.0,
+            unique_switches: 0,
+            unique_paths: 0,
+            avg_path_length: 0.0,
+        };
+    }
+    
+    // For now, get all flow IDs and collect metrics
+    // This is a simplified implementation - in a real system you'd want to optimize this
+    let mut all_delays: Vec<u64> = Vec::new();
+    let mut all_queue_utils: Vec<f64> = Vec::new();
+    let mut unique_switches = std::collections::HashSet::new();
+    let mut path_lengths = Vec::new();
+    
+    // Since we don't have a direct way to iterate all flows, we'll use a query
+    // to get recent flows and calculate metrics from them
+    if let Ok(query_result) = state.engine.query(
+        crate::storage::QueryBuilder::new().limit(1000) // Get up to 1000 flows
+    ) {
+        let flows = state.engine.get_flows(&query_result.flow_ids);
+        
+        for flow in flows {
+            // Collect path length
+            path_lengths.push(flow.path.switches.len() as f64);
+            
+            // Collect unique switches
+            for switch in &flow.path.switches {
+                unique_switches.insert(switch.clone());
+            }
+            
+            // Collect metrics from hops
+            for hop in &flow.hops {
+                if let Some(delay) = hop.metrics.delay_ns {
+                    all_delays.push(delay);
+                }
+                if let Some(queue_util) = hop.metrics.queue_util {
+                    all_queue_utils.push(queue_util);
+                }
+            }
+        }
+    }
+    
+    // Calculate averages and maximums
+    let avg_delay = if all_delays.is_empty() {
+        0.0
+    } else {
+        all_delays.iter().sum::<u64>() as f64 / all_delays.len() as f64
+    };
+    
+    let max_delay = all_delays.iter().max().copied().unwrap_or(0) as i32;
+    
+    let avg_queue_util = if all_queue_utils.is_empty() {
+        0.0
+    } else {
+        all_queue_utils.iter().sum::<f64>() / all_queue_utils.len() as f64
+    };
+    
+    let max_queue_util = all_queue_utils.iter().fold(0.0f64, |a, &b| a.max(b));
+    
+    // Calculate congestion ratio (percentage of hops with queue utilization > 0.7)
+    let congested_hops = all_queue_utils.iter().filter(|&&util| util > 0.7).count();
+    let congestion_ratio = if all_queue_utils.is_empty() {
+        0.0
+    } else {
+        congested_hops as f64 / all_queue_utils.len() as f64
+    };
+    
+    let avg_path_length = if path_lengths.is_empty() {
+        0.0
+    } else {
+        path_lengths.iter().sum::<f64>() / path_lengths.len() as f64
+    };
+    
+    NetworkMetrics {
+        avg_delay,
+        max_delay,
+        avg_queue_util,
+        max_queue_util,
+        congestion_ratio,
+        unique_switches: unique_switches.len(),
+        unique_paths: flow_count, // Each flow represents a unique path in our current implementation
+        avg_path_length,
+    }
 } 

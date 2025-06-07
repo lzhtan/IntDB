@@ -92,37 +92,96 @@ impl StorageEngine {
         let flow_id = flow.flow_id.clone();
         
         // Check if flow already exists
-        {
+        let existing_flow = {
             let flows = self.flows.read().unwrap();
-            if flows.contains_key(&flow_id) {
-                return Err(StorageError::FlowAlreadyExists(flow_id));
+            flows.get(&flow_id).cloned()
+        };
+        
+        match existing_flow {
+            Some(mut existing) => {
+                // Flow exists, append new telemetry data
+                self.append_telemetry(&mut existing, &flow)?;
+                
+                // Update the existing flow in storage
+                {
+                    let mut flows = self.flows.write().unwrap();
+                    flows.insert(flow_id.clone(), existing.clone());
+                }
+                
+                // Update indexes with the updated flow
+                {
+                    let mut path_index = self.path_index.write().unwrap();
+                    path_index.update_flow(&existing);
+                }
+                
+                {
+                    let mut time_index = self.time_index.write().unwrap();
+                    time_index.update_flow(&existing);
+                }
+            }
+            None => {
+                // New flow, check capacity
+                if let Some(max_flows) = self.config.max_flows {
+                    let flows = self.flows.read().unwrap();
+                    if flows.len() >= max_flows {
+                        return Err(StorageError::StorageFull);
+                    }
+                }
+                
+                // Insert into main storage
+                {
+                    let mut flows = self.flows.write().unwrap();
+                    flows.insert(flow_id.clone(), flow.clone());
+                }
+                
+                // Update indexes
+                {
+                    let mut path_index = self.path_index.write().unwrap();
+                    path_index.add_flow(&flow);
+                }
+                
+                {
+                    let mut time_index = self.time_index.write().unwrap();
+                    time_index.add_flow(&flow);
+                }
             }
         }
         
-        // Check capacity
-        if let Some(max_flows) = self.config.max_flows {
-            let flows = self.flows.read().unwrap();
-            if flows.len() >= max_flows {
-                return Err(StorageError::StorageFull);
+        Ok(())
+    }
+    
+    /// Append telemetry data from new flow to existing flow
+    fn append_telemetry(&self, existing: &mut Flow, new_flow: &Flow) -> Result<(), StorageError> {
+        // Calculate the new hop_index offset to avoid conflicts
+        let max_hop_index = existing.hops.iter()
+            .map(|h| h.hop_index)
+            .max()
+            .unwrap_or(0);
+        
+        // Append all new hops with adjusted hop_index
+        for (i, new_hop) in new_flow.hops.iter().enumerate() {
+            let mut appended_hop = new_hop.clone();
+            appended_hop.hop_index = max_hop_index + 1 + i as u32;
+            existing.hops.push(appended_hop);
+        }
+        
+        // Update flow timestamps
+        if new_flow.start_time < existing.start_time {
+            existing.start_time = new_flow.start_time;
+        }
+        if new_flow.end_time > existing.end_time {
+            existing.end_time = new_flow.end_time;
+        }
+        
+        // Update path if necessary (add any new switches)
+        for switch in &new_flow.path.switches {
+            if !existing.path.switches.contains(switch) {
+                existing.path.switches.push(switch.clone());
             }
         }
         
-        // Insert into main storage
-        {
-            let mut flows = self.flows.write().unwrap();
-            flows.insert(flow_id.clone(), flow.clone());
-        }
-        
-        // Update indexes
-        {
-            let mut path_index = self.path_index.write().unwrap();
-            path_index.add_flow(&flow);
-        }
-        
-        {
-            let mut time_index = self.time_index.write().unwrap();
-            time_index.add_flow(&flow);
-        }
+        // Keep hops sorted by hop_index to maintain chronological order
+        existing.hops.sort_by_key(|h| h.hop_index);
         
         Ok(())
     }

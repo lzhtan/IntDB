@@ -89,6 +89,14 @@ impl PathIndex {
         }
     }
     
+    /// Update a flow in the path index (re-add with potentially new path)
+    pub fn update_flow(&mut self, flow: &Flow) {
+        // For simplicity, we remove and re-add the flow
+        // This handles cases where the path might have changed
+        self.remove_flow(flow);
+        self.add_flow(flow);
+    }
+    
     /// Find flows with exact path match
     pub fn find_exact_path(&self, path: &NetworkPath) -> BTreeSet<String> {
         let path_hash = path.hash();
@@ -212,6 +220,14 @@ impl TimeIndex {
                 self.time_buckets.remove(&bucket);
             }
         }
+    }
+    
+    /// Update a flow in the time index (re-add with potentially new timestamp)
+    pub fn update_flow(&mut self, flow: &Flow) {
+        // For simplicity, we remove and re-add the flow
+        // This handles cases where the timestamp might have changed
+        self.remove_flow(flow);
+        self.add_flow(flow);
     }
     
     /// Find flows within a time range

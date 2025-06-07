@@ -73,7 +73,7 @@
           "refId": "A"
         }
       ],
-      "title": "服务运行时间",
+      "title": "Service Uptime",
       "type": "stat"
     },
     {
@@ -92,12 +92,12 @@
                 "0": {
                   "color": "red",
                   "index": 0,
-                  "text": "离线"
+                  "text": "Offline"
                 },
                 "1": {
                   "color": "green",
                   "index": 1,
-                  "text": "在线"
+                  "text": "Online"
                 }
               },
               "type": "value"
@@ -148,7 +148,7 @@
           "refId": "A"
         }
       ],
-      "title": "服务健康状态",
+      "title": "Service Health Status",
       "type": "stat"
     },
     {
@@ -210,7 +210,7 @@
           "refId": "A"
         }
       ],
-      "title": "总流数量",
+      "title": "Total Flow Count",
       "type": "stat"
     },
     {
@@ -273,7 +273,7 @@
           "refId": "A"
         }
       ],
-      "title": "内存使用估计",
+      "title": "Memory Usage Estimate",
       "type": "stat"
     },
     {
@@ -336,7 +336,7 @@
           "refId": "A"
         }
       ],
-      "title": "平均网络延迟",
+      "title": "Average Network Delay",
       "type": "stat"
     },
     {
@@ -399,7 +399,7 @@
           "refId": "A"
         }
       ],
-      "title": "最大网络延迟",
+      "title": "Maximum Network Delay",
       "type": "stat"
     },
     {
@@ -464,7 +464,7 @@
           "refId": "A"
         }
       ],
-      "title": "平均队列利用率",
+      "title": "Average Queue Utilization",
       "type": "stat"
     },
     {
@@ -529,7 +529,7 @@
           "refId": "A"
         }
       ],
-      "title": "最大队列利用率",
+      "title": "Maximum Queue Utilization",
       "type": "stat"
     },
     {
@@ -594,7 +594,7 @@
           "refId": "A"
         }
       ],
-      "title": "队列拥塞比例",
+      "title": "Queue Congestion Ratio",
       "type": "stat"
     },
     {
@@ -648,7 +648,7 @@
           "refId": "A"
         }
       ],
-      "title": "交换机数量",
+      "title": "Unique Switches",
       "type": "stat"
     },
     {
@@ -702,7 +702,7 @@
           "refId": "A"
         }
       ],
-      "title": "网络路径数量",
+      "title": "Unique Paths",
       "type": "stat"
     },
     {
@@ -757,7 +757,7 @@
           "refId": "A"
         }
       ],
-      "title": "平均路径长度",
+      "title": "Average Path Length",
       "type": "stat"
     },
     {
@@ -811,7 +811,7 @@
           "refId": "A"
         }
       ],
-      "title": "活跃流数量",
+      "title": "Active Flows",
       "type": "stat"
     },
     {
@@ -865,7 +865,7 @@
           "refId": "A"
         }
       ],
-      "title": "遥测流数量",
+      "title": "Completed Flows",
       "type": "stat"
     },
     {
@@ -927,7 +927,7 @@
           "refId": "A"
         }
       ],
-      "title": "超时流数量",
+      "title": "Timeout Flows",
       "type": "stat"
     },
     {
@@ -1009,16 +1009,16 @@
       "targets": [
         {
           "expr": "intdb_avg_delay_ns",
-          "legendFormat": "平均延迟",
+          "legendFormat": "Average Delay",
           "refId": "A"
         },
         {
           "expr": "intdb_max_delay_ns",
-          "legendFormat": "最大延迟",
+          "legendFormat": "Maximum Delay",
           "refId": "B"
         }
       ],
-      "title": "网络延迟趋势",
+      "title": "Network Delay",
       "type": "timeseries"
     },
     {
@@ -1102,21 +1102,21 @@
       "targets": [
         {
           "expr": "intdb_avg_queue_utilization",
-          "legendFormat": "平均队列利用率",
+          "legendFormat": "Average Queue Utilization",
           "refId": "A"
         },
         {
           "expr": "intdb_max_queue_utilization",
-          "legendFormat": "最大队列利用率",
+          "legendFormat": "Maximum Queue Utilization",
           "refId": "B"
         },
         {
           "expr": "intdb_queue_congestion_ratio",
-          "legendFormat": "拥塞比例",
+          "legendFormat": "Congestion Ratio",
           "refId": "C"
         }
       ],
-      "title": "队列利用率趋势",
+      "title": "Queue Utilization",
       "type": "timeseries"
     }
   ],
@@ -1136,7 +1136,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "IntDB 网络监控仪表盘",
+  "title": "IntDB Network Monitoring Dashboard",
   "uid": "intdb-complete-dashboard",
   "version": 1
 } 
