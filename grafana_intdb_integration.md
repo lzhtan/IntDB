@@ -4,6 +4,16 @@
 
 IntDB现在完全支持与Grafana集成，提供强大的网络流量可视化能力。本指南将帮你完成完整的集成配置。
 
+### 📦 预制仪表板模板
+
+**⚡ 快速开始：** 我们提供了完整的Grafana仪表板配置文件 `Grafana/intdb_dashboard.json`，包含以下预配置面板：
+
+- **服务状态面板**：运行时间、健康状态、内存使用
+- **网络指标面板**：平均/最大延迟、队列利用率、拥塞比率  
+- **流量统计面板**：活跃流、唯一交换机、路径信息
+- **时间序列图表**：网络延迟和队列利用率趋势
+
+
 ## 🔧 集成方式
 
 ### 方式1: Prometheus数据源（推荐）
@@ -119,7 +129,35 @@ docker run -d \
 # 确保它运行在3000端口（不与IntDB冲突）
 ```
 
-### 3. 验证连接
+### 3. 快速导入模板
+
+**🎯 推荐方式：使用预制模板**
+
+1. **登录Grafana**
+   - 访问 `http://localhost:3000`
+   - 默认用户名/密码：`admin`/`admin`
+
+2. **添加数据源**
+   - 进入 `Configuration` → `Data Sources` → `Add data source`
+   - 选择 `Prometheus`
+   - 配置 URL: `http://localhost:2999`
+   - 点击 `Save & Test`
+
+3. **导入仪表板模板**
+   ```bash
+   # 方式1: 上传文件
+   # 在Grafana中: + → Import → Upload JSON file → 选择 Grafana/intdb_dashboard.json
+   
+   # 方式2: 复制粘贴
+   # 复制 Grafana/intdb_dashboard.json 的内容 → + → Import → 粘贴JSON → Load
+   ```
+
+4. **完成配置**
+   - 选择数据源：`Prometheus`
+   - 点击 `Import`
+   - 🎉 完成！你的IntDB监控仪表板已就绪
+
+### 4. 验证连接
 
 访问 `http://localhost:3000` 进入Grafana，然后：
 
@@ -328,17 +366,8 @@ alert:
    - 复制JSON配置用于备份或分享
 
 3. **使用预定义配置**
-   - 我们提供了完整的仪表盘配置文件: `Grafana/intdb_dashboard.json`
-   - 导入方式：
-     1. 进入Grafana → `+` → `Import`
-     2. 点击 `Upload JSON file` 选择 `intdb_dashboard.json`
-     3. 或者直接复制JSON内容粘贴到文本框
-     4. 点击 `Load` → `Import`
-   - 该配置包含4个预配置面板：
-     - 启动时间 (Stat)
-     - 健康度 (Time series)
-     - 活跃流数量 (Stat)  
-     - 内存占用 (Time series)
+   - 推荐使用我们提供的完整仪表盘配置文件: `Grafana/intdb_dashboard.json`
+   - 该配置包含16个预配置面板，覆盖常见的的网络监控需求
 
 ## 🔍 故障排除
 

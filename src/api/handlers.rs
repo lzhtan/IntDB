@@ -868,6 +868,19 @@ pub async fn prometheus_query_range(
 ) -> ApiResult<Json<serde_json::Value>> {
     let query = params.get("query").unwrap_or(&"".to_string()).clone();
     
+    // Parse time range parameters from Grafana
+    let start_time = params.get("start")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or_else(|| chrono::Utc::now().timestamp() - 3600); // Default: 1 hour ago
+    
+    let end_time = params.get("end")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or_else(|| chrono::Utc::now().timestamp()); // Default: now
+    
+    let step = params.get("step")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(30); // Default: 30 seconds
+    
     // Get real-time data from the storage engine
     let flow_count = state.engine.flow_count();
     let uptime = state.start_time
@@ -952,6 +965,9 @@ pub async fn prometheus_query_range(
             })))
         },
         "intdb_avg_delay_ns" => {
+            // Extract real historical data from IntDB flows based on time range
+            let real_values = extract_historical_delay_data(&state, "avg", start_time, end_time, step);
+            
             Ok(Json(serde_json::json!({
                 "status": "success",
                 "data": {
@@ -959,16 +975,16 @@ pub async fn prometheus_query_range(
                     "result": [
                         {
                             "metric": {"__name__": "intdb_avg_delay_ns"},
-                            "values": [
-                                [current_timestamp - 60, network_metrics.avg_delay.to_string()],
-                                [current_timestamp, network_metrics.avg_delay.to_string()]
-                            ]
+                            "values": real_values
                         }
                     ]
                 }
             })))
         },
         "intdb_max_delay_ns" => {
+            // Extract real historical data from IntDB flows based on time range
+            let real_values = extract_historical_delay_data(&state, "max", start_time, end_time, step);
+            
             Ok(Json(serde_json::json!({
                 "status": "success",
                 "data": {
@@ -976,16 +992,16 @@ pub async fn prometheus_query_range(
                     "result": [
                         {
                             "metric": {"__name__": "intdb_max_delay_ns"},
-                            "values": [
-                                [current_timestamp - 60, network_metrics.max_delay.to_string()],
-                                [current_timestamp, network_metrics.max_delay.to_string()]
-                            ]
+                            "values": real_values
                         }
                     ]
                 }
             })))
         },
         "intdb_avg_queue_utilization" => {
+            // Extract real historical data from IntDB flows based on time range
+            let real_values = extract_historical_queue_data(&state, "avg", start_time, end_time, step);
+            
             Ok(Json(serde_json::json!({
                 "status": "success",
                 "data": {
@@ -993,16 +1009,16 @@ pub async fn prometheus_query_range(
                     "result": [
                         {
                             "metric": {"__name__": "intdb_avg_queue_utilization"},
-                            "values": [
-                                [current_timestamp - 60, network_metrics.avg_queue_util.to_string()],
-                                [current_timestamp, network_metrics.avg_queue_util.to_string()]
-                            ]
+                            "values": real_values
                         }
                     ]
                 }
             })))
         },
         "intdb_max_queue_utilization" => {
+            // Extract real historical data from IntDB flows based on time range
+            let real_values = extract_historical_queue_data(&state, "max", start_time, end_time, step);
+            
             Ok(Json(serde_json::json!({
                 "status": "success",
                 "data": {
@@ -1010,16 +1026,16 @@ pub async fn prometheus_query_range(
                     "result": [
                         {
                             "metric": {"__name__": "intdb_max_queue_utilization"},
-                            "values": [
-                                [current_timestamp - 60, network_metrics.max_queue_util.to_string()],
-                                [current_timestamp, network_metrics.max_queue_util.to_string()]
-                            ]
+                            "values": real_values
                         }
                     ]
                 }
             })))
         },
         "intdb_queue_congestion_ratio" => {
+            // Extract real historical data from IntDB flows based on time range
+            let real_values = extract_historical_queue_data(&state, "congestion", start_time, end_time, step);
+            
             Ok(Json(serde_json::json!({
                 "status": "success",
                 "data": {
@@ -1027,10 +1043,7 @@ pub async fn prometheus_query_range(
                     "result": [
                         {
                             "metric": {"__name__": "intdb_queue_congestion_ratio"},
-                            "values": [
-                                [current_timestamp - 60, network_metrics.congestion_ratio.to_string()],
-                                [current_timestamp, network_metrics.congestion_ratio.to_string()]
-                            ]
+                            "values": real_values
                         }
                     ]
                 }
@@ -1200,6 +1213,183 @@ struct NetworkMetrics {
     unique_switches: usize,
     unique_paths: usize,
     avg_path_length: f64,
+}
+
+/// Extract real historical delay data from IntDB flows based on time range
+fn extract_historical_delay_data(state: &AppState, metric_type: &str, start_time: i64, end_time: i64, step: i64) -> Vec<[serde_json::Value; 2]> {
+    let mut time_values = Vec::new();
+    
+    // Get flows and extract real historical data from hops
+    if let Ok(query_result) = state.engine.query(
+        crate::storage::QueryBuilder::new().limit(100) // Get more flows for better time coverage
+    ) {
+        let flows = state.engine.get_flows(&query_result.flow_ids);
+        
+        // Collect all hop data within the time range
+        for flow in flows {
+            for hop in &flow.hops {
+                if let Some(delay) = hop.metrics.delay_ns {
+                    let timestamp = hop.timestamp.timestamp();
+                    
+                    // Only include data within the requested time range
+                    if timestamp >= start_time && timestamp <= end_time {
+                        let delay_value = match metric_type {
+                            "avg" => delay as f64,
+                            "max" => delay as f64, // For max, we'll use the same value (simplification)
+                            _ => delay as f64,
+                        };
+                        time_values.push([serde_json::Value::Number(serde_json::Number::from(timestamp)), serde_json::Value::String(delay_value.to_string())]);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Sort by timestamp
+    time_values.sort_by_key(|v| v[0].as_i64().unwrap_or(0));
+    
+    // If we have real data, aggregate it into time buckets based on step
+    if !time_values.is_empty() {
+        let mut aggregated_values = Vec::new();
+        let mut current_bucket_start = start_time;
+        
+        while current_bucket_start < end_time {
+            let bucket_end = current_bucket_start + step;
+            
+            // Find all values in this time bucket
+            let bucket_values: Vec<f64> = time_values.iter()
+                .filter_map(|v| {
+                    let timestamp = v[0].as_i64().unwrap_or(0);
+                    if timestamp >= current_bucket_start && timestamp < bucket_end {
+                        v[1].as_str().and_then(|s| s.parse::<f64>().ok())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            
+            // Calculate aggregated value for this bucket
+            if !bucket_values.is_empty() {
+                let aggregated_value = match metric_type {
+                    "avg" => bucket_values.iter().sum::<f64>() / bucket_values.len() as f64,
+                    "max" => bucket_values.iter().fold(0.0f64, |a, &b| a.max(b)),
+                    _ => bucket_values.iter().sum::<f64>() / bucket_values.len() as f64,
+                };
+                
+                // Use the middle of the time bucket as the timestamp
+                let bucket_timestamp = current_bucket_start + step / 2;
+                aggregated_values.push([
+                    serde_json::Value::Number(serde_json::Number::from(bucket_timestamp)), 
+                    serde_json::Value::String(aggregated_value.to_string())
+                ]);
+            }
+            
+            current_bucket_start += step;
+        }
+        
+        if !aggregated_values.is_empty() {
+            return aggregated_values;
+        }
+    }
+    
+    // If no real data, return current value at the end time
+    let network_metrics = calculate_network_metrics(state);
+    let current_value = match metric_type {
+        "avg" => network_metrics.avg_delay,
+        "max" => network_metrics.max_delay as f64,
+        _ => network_metrics.avg_delay,
+    };
+    vec![[serde_json::Value::Number(serde_json::Number::from(end_time)), serde_json::Value::String(current_value.to_string())]]
+}
+
+/// Extract real historical queue utilization data from IntDB flows based on time range
+fn extract_historical_queue_data(state: &AppState, metric_type: &str, start_time: i64, end_time: i64, step: i64) -> Vec<[serde_json::Value; 2]> {
+    let mut time_values = Vec::new();
+    
+    // Get flows and extract real historical data from hops
+    if let Ok(query_result) = state.engine.query(
+        crate::storage::QueryBuilder::new().limit(100) // Get more flows for better time coverage
+    ) {
+        let flows = state.engine.get_flows(&query_result.flow_ids);
+        
+        // Collect all hop data within the time range
+        for flow in flows {
+            for hop in &flow.hops {
+                if let Some(queue_util) = hop.metrics.queue_util {
+                    let timestamp = hop.timestamp.timestamp();
+                    
+                    // Only include data within the requested time range
+                    if timestamp >= start_time && timestamp <= end_time {
+                        let queue_value = match metric_type {
+                            "avg" => queue_util,
+                            "max" => queue_util, // For max, we'll use the same value (simplification)
+                            "congestion" => if queue_util > 0.7 { 1.0 } else { 0.0 },
+                            _ => queue_util,
+                        };
+                        time_values.push([serde_json::Value::Number(serde_json::Number::from(timestamp)), serde_json::Value::String(queue_value.to_string())]);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Sort by timestamp
+    time_values.sort_by_key(|v| v[0].as_i64().unwrap_or(0));
+    
+    // If we have real data, aggregate it into time buckets based on step
+    if !time_values.is_empty() {
+        let mut aggregated_values = Vec::new();
+        let mut current_bucket_start = start_time;
+        
+        while current_bucket_start < end_time {
+            let bucket_end = current_bucket_start + step;
+            
+            // Find all values in this time bucket
+            let bucket_values: Vec<f64> = time_values.iter()
+                .filter_map(|v| {
+                    let timestamp = v[0].as_i64().unwrap_or(0);
+                    if timestamp >= current_bucket_start && timestamp < bucket_end {
+                        v[1].as_str().and_then(|s| s.parse::<f64>().ok())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            
+            // Calculate aggregated value for this bucket
+            if !bucket_values.is_empty() {
+                let aggregated_value = match metric_type {
+                    "avg" => bucket_values.iter().sum::<f64>() / bucket_values.len() as f64,
+                    "max" => bucket_values.iter().fold(0.0f64, |a, &b| a.max(b)),
+                    "congestion" => bucket_values.iter().sum::<f64>() / bucket_values.len() as f64, // Average congestion ratio
+                    _ => bucket_values.iter().sum::<f64>() / bucket_values.len() as f64,
+                };
+                
+                // Use the middle of the time bucket as the timestamp
+                let bucket_timestamp = current_bucket_start + step / 2;
+                aggregated_values.push([
+                    serde_json::Value::Number(serde_json::Number::from(bucket_timestamp)), 
+                    serde_json::Value::String(aggregated_value.to_string())
+                ]);
+            }
+            
+            current_bucket_start += step;
+        }
+        
+        if !aggregated_values.is_empty() {
+            return aggregated_values;
+        }
+    }
+    
+    // If no real data, return current value at the end time
+    let network_metrics = calculate_network_metrics(state);
+    let current_value = match metric_type {
+        "avg" => network_metrics.avg_queue_util,
+        "max" => network_metrics.max_queue_util,
+        "congestion" => network_metrics.congestion_ratio,
+        _ => network_metrics.avg_queue_util,
+    };
+    vec![[serde_json::Value::Number(serde_json::Number::from(end_time)), serde_json::Value::String(current_value.to_string())]]
 }
 
 /// Calculate network metrics from all flows in the system
