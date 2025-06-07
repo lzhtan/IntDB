@@ -372,7 +372,7 @@ curl http://127.0.0.1:3000/health
 ```bash
 # 健康检查
 curl http://127.0.0.1:2999/health
-# 响应: {"status":"healthy","version":"0.1.0","uptime_seconds":5,"flow_count":3}
+# 响应: {"status":"healthy","version":"0.2.0","uptime_seconds":5,"flow_count":3}
 
 # 获取统计信息  
 curl http://127.0.0.1:2999/stats

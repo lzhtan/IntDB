@@ -65,7 +65,7 @@ cargo run --example api_server
 curl http://127.0.0.1:2999/health
 
 # 应该返回类似：
-# {"status":"healthy","version":"0.1.0","uptime_seconds":5,"flow_count":3}
+# {"status":"healthy","version":"0.2.0","uptime_seconds":5,"flow_count":3}
 ```
 
 ### 方法2：使用Homebrew（未来支持）

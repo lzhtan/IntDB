@@ -299,7 +299,7 @@ sudo systemctl reload nginx
 ```bash
 # 健康检查
 curl http://localhost:2999/health
-# 预期输出: {"status":"healthy","version":"0.1.0",...}
+# 预期输出: {"status":"healthy","version":"0.2.0",...}
 
 # 测试查询
 curl -X POST http://localhost:2999/query \
