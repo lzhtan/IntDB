@@ -326,7 +326,7 @@ impl TimeIndex {
         let mut bytes = 0;
         
         // Time buckets BTreeMap
-        for (timestamp, flow_ids) in &self.time_buckets {
+        for (_timestamp, flow_ids) in &self.time_buckets {
             bytes += 16; // DateTime<Utc> is ~16 bytes
             bytes += flow_ids.len() * 24; // BTreeSet entries (~24 bytes per flow_id)
             bytes += 24; // BTreeMap entry overhead

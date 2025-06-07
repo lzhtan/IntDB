@@ -403,7 +403,7 @@ pub async fn prometheus_metrics(State(state): State<AppState>) -> ApiResult<Stri
         .as_secs();
     
     // Get detailed network statistics
-    let mut query_builder = QueryBuilder::new();
+    let query_builder = QueryBuilder::new();
     let query_result = state.engine.query(query_builder)?;
     let flows = state.engine.get_flows(&query_result.flow_ids);
     
@@ -519,7 +519,7 @@ intdb_flows_timeout {}
 "#,
         flow_count,
         uptime,
-        flow_count * 1024,  // Rough memory estimate
+        state.engine.estimate_memory_usage(),
         avg_delay,
         max_delay,
         avg_queue_util,
@@ -671,7 +671,7 @@ pub async fn prometheus_query(
                     "result": [
                         {
                             "metric": {"__name__": "intdb_memory_usage_estimate_bytes"},
-                            "value": [chrono::Utc::now().timestamp(), (flow_count * 1024).to_string()]
+                            "value": [chrono::Utc::now().timestamp(), state.engine.estimate_memory_usage().to_string()]
                         }
                     ]
                 }
@@ -922,7 +922,7 @@ pub async fn prometheus_query_range(
                         {
                             "metric": {"__name__": "intdb_uptime_seconds"},
                             "values": [
-                                [current_timestamp - 60, (uptime - 60).to_string()],
+                                [current_timestamp - 60, std::cmp::max(0, uptime as i64 - 60).to_string()],
                                 [current_timestamp, uptime.to_string()]
                             ]
                         }
@@ -939,8 +939,8 @@ pub async fn prometheus_query_range(
                         {
                             "metric": {"__name__": "intdb_memory_usage_estimate_bytes"},
                             "values": [
-                                [current_timestamp - 60, (flow_count * 1024).to_string()],
-                                [current_timestamp, (flow_count * 1024).to_string()]
+                                [current_timestamp - 60, state.engine.estimate_memory_usage().to_string()],
+                                [current_timestamp, state.engine.estimate_memory_usage().to_string()]
                             ]
                         }
                     ]

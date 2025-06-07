@@ -1,6 +1,4 @@
 use log::info;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 use intdb::api::routes::create_router;
 use intdb::api::handlers::AppState;
