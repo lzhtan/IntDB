@@ -97,7 +97,7 @@ done
 cargo run --example test_api_server
 
 # 压力测试命令
-siege -c 10 -t 30s http://127.0.0.1:3000/health
+siege -c 10 -t 30s http://127.0.0.1:2999/health
 ```
 
 ### IntDB测试结果
@@ -288,7 +288,7 @@ cargo run --example test_api_server &
 brew services start influxdb
 
 # 验证服务状态
-curl http://127.0.0.1:3000/health
+curl http://127.0.0.1:2999/health
 curl http://127.0.0.1:8086/ping
 ```
 
@@ -359,7 +359,7 @@ df = pd.read_csv('concurrency_scaling.csv')
 # IntDB专门的路径查询
 siege -c 10 -t 30s \
   -H 'Content-Type: application/json' \
-  'http://127.0.0.1:3000/query POST {"path_conditions": [{"contains": ["s1", "s2"]}]}'
+  'http://127.0.0.1:2999/query POST {"path_conditions": [{"contains": ["s1", "s2"]}]}'
 ```
 
 #### InfluxDB时序查询测试
@@ -464,7 +464,7 @@ head -20 test/performance_results_20250606_220608/intdb_c100_temp.log
 #### 4. 验证测试环境
 ```bash
 # 验证IntDB和InfluxDB服务状态
-curl -s http://127.0.0.1:3000/health && echo " ✅ IntDB运行正常"
+curl -s http://127.0.0.1:2999/health && echo " ✅ IntDB运行正常"
 curl -s http://127.0.0.1:8086/ping && echo " ✅ InfluxDB运行正常"
 
 # 检查siege工具
@@ -544,17 +544,17 @@ echo "📊 开始IntDB性能测试..."
 
 # 健康检查测试
 echo "1. 健康检查测试"
-siege -c 10 -t 30s http://127.0.0.1:3000/health > intdb_health_test.log
+siege -c 10 -t 30s http://127.0.0.1:2999/health > intdb_health_test.log
 
 # 流查询测试
 echo "2. 流查询测试"
-siege -c 10 -t 30s http://127.0.0.1:3000/flows/test_flow_1 > intdb_flow_test.log
+siege -c 10 -t 30s http://127.0.0.1:2999/flows/test_flow_1 > intdb_flow_test.log
 
 # 路径查询测试
 echo "3. 路径查询测试"
 siege -c 5 -t 30s \
   -H 'Content-Type: application/json' \
-  'http://127.0.0.1:3000/query POST {"path_conditions": [{"contains": ["s1", "s2"]}]}' \
+  'http://127.0.0.1:2999/query POST {"path_conditions": [{"contains": ["s1", "s2"]}]}' \
   > intdb_path_test.log
 
 # 停止服务

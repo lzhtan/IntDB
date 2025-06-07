@@ -1,0 +1,346 @@
+{
+  "legacy_flow_example": {
+    "description": "Legacy flow format for backward compatibility",
+    "endpoint": "POST /flows",
+    "data": {
+      "flow": {
+        "flow_id": "int_legacy_example_001",
+        "telemetry": [
+          {
+            "switch_id": "spine1",
+            "timestamp": "2025-06-07T06:00:00.000Z",
+            "queue_util": 0.15,
+            "delay_ns": 250,
+            "bandwidth_bps": 10000000000,
+            "drop_count": 0,
+            "egress_port": 1,
+            "ingress_port": 0
+          },
+          {
+            "switch_id": "leaf2", 
+            "timestamp": "2025-06-07T06:00:00.000250Z",
+            "queue_util": 0.45,
+            "delay_ns": 380,
+            "bandwidth_bps": 10000000000,
+            "drop_count": 2,
+            "egress_port": 2,
+            "ingress_port": 1
+          },
+          {
+            "switch_id": "server3",
+            "timestamp": "2025-06-07T06:00:00.000630Z", 
+            "queue_util": 0.25,
+            "delay_ns": 200,
+            "bandwidth_bps": 1000000000,
+            "drop_count": 0,
+            "egress_port": 3,
+            "ingress_port": 2
+          }
+        ]
+      }
+    }
+  },
+
+  "spatiotemporal_logical_example": {
+    "description": "Spatiotemporal flow with logical path only (no spatial coordinates)",
+    "endpoint": "POST /st-flows",
+    "data": {
+      "flow": {
+        "flow_id": "int_st_logical_001",
+        "logical_path": ["spine1", "leaf2", "server3"],
+        "topology_coordinates": null,
+        "telemetry_data": [
+          {
+            "hop_index": 0,
+            "switch_id": "spine1",
+            "coordinates": null,
+            "temporal_samples": [
+              {
+                "timestamp": "2025-06-07T06:00:00.000Z",
+                "queue_util": 0.15,
+                "delay_ns": 250,
+                "bandwidth_bps": 10000000000,
+                "drop_count": 0,
+                "egress_port": 1,
+                "ingress_port": 0
+              },
+              {
+                "timestamp": "2025-06-07T06:00:01.000Z",
+                "queue_util": 0.18,
+                "delay_ns": 280,
+                "bandwidth_bps": 10000000000,
+                "drop_count": 0,
+                "egress_port": 1,
+                "ingress_port": 0
+              }
+            ]
+          },
+          {
+            "hop_index": 1,
+            "switch_id": "leaf2",
+            "coordinates": null,
+            "temporal_samples": [
+              {
+                "timestamp": "2025-06-07T06:00:00.000250Z",
+                "queue_util": 0.45,
+                "delay_ns": 380,
+                "bandwidth_bps": 10000000000,
+                "drop_count": 2,
+                "egress_port": 2,
+                "ingress_port": 1
+              },
+              {
+                "timestamp": "2025-06-07T06:00:01.000250Z",
+                "queue_util": 0.42,
+                "delay_ns": 360,
+                "bandwidth_bps": 10000000000,
+                "drop_count": 1,
+                "egress_port": 2,
+                "ingress_port": 1
+              }
+            ]
+          },
+          {
+            "hop_index": 2,
+            "switch_id": "server3",
+            "coordinates": null,
+            "temporal_samples": [
+              {
+                "timestamp": "2025-06-07T06:00:00.000630Z",
+                "queue_util": 0.25,
+                "delay_ns": 200,
+                "bandwidth_bps": 1000000000,
+                "drop_count": 0,
+                "egress_port": 3,
+                "ingress_port": 2
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+
+  "spatiotemporal_spatial_example": {
+    "description": "Spatiotemporal flow with full spatial information",
+    "endpoint": "POST /st-flows",
+    "data": {
+      "flow": {
+        "flow_id": "int_st_spatial_001",
+        "logical_path": ["dc1_spine1", "dc1_leaf2", "dc1_server3"],
+        "topology_coordinates": [
+          {
+            "switch": "dc1_spine1",
+            "topo_x": 100.0,
+            "topo_y": 300.0,
+            "zone": "spine_layer"
+          },
+          {
+            "switch": "dc1_leaf2", 
+            "topo_x": 200.0,
+            "topo_y": 200.0,
+            "zone": "leaf_layer"
+          },
+          {
+            "switch": "dc1_server3",
+            "topo_x": 250.0,
+            "topo_y": 100.0,
+            "zone": "server_layer"
+          }
+        ],
+        "telemetry_data": [
+          {
+            "hop_index": 0,
+            "switch_id": "dc1_spine1",
+            "coordinates": {
+              "x": 100.0,
+              "y": 300.0,
+              "z": 2.0
+            },
+            "temporal_samples": [
+              {
+                "timestamp": "2025-06-07T06:00:00.000Z",
+                "queue_util": 0.12,
+                "delay_ns": 220,
+                "bandwidth_bps": 40000000000,
+                "drop_count": 0,
+                "egress_port": 1,
+                "ingress_port": 0
+              },
+              {
+                "timestamp": "2025-06-07T06:00:01.000Z",
+                "queue_util": 0.14,
+                "delay_ns": 240,
+                "bandwidth_bps": 40000000000,
+                "drop_count": 0,
+                "egress_port": 1,
+                "ingress_port": 0
+              }
+            ]
+          },
+          {
+            "hop_index": 1,
+            "switch_id": "dc1_leaf2",
+            "coordinates": {
+              "x": 200.0,
+              "y": 200.0,
+              "z": 1.0
+            },
+            "temporal_samples": [
+              {
+                "timestamp": "2025-06-07T06:00:00.000220Z",
+                "queue_util": 0.38,
+                "delay_ns": 350,
+                "bandwidth_bps": 25000000000,
+                "drop_count": 1,
+                "egress_port": 2,
+                "ingress_port": 1
+              },
+              {
+                "timestamp": "2025-06-07T06:00:01.000240Z",
+                "queue_util": 0.35,
+                "delay_ns": 330,
+                "bandwidth_bps": 25000000000,
+                "drop_count": 0,
+                "egress_port": 2,
+                "ingress_port": 1
+              }
+            ]
+          },
+          {
+            "hop_index": 2,
+            "switch_id": "dc1_server3",
+            "coordinates": {
+              "x": 250.0,
+              "y": 100.0,
+              "z": 0.0
+            },
+            "temporal_samples": [
+              {
+                "timestamp": "2025-06-07T06:00:00.000570Z",
+                "queue_util": 0.22,
+                "delay_ns": 180,
+                "bandwidth_bps": 10000000000,
+                "drop_count": 0,
+                "egress_port": 3,
+                "ingress_port": 2
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+
+  "query_examples": {
+    "description": "Example queries for INT data",
+    "legacy_queries": {
+      "find_flows_through_switch": {
+        "endpoint": "POST /query",
+        "data": {
+          "path_conditions": [
+            {
+              "type": "through_switch",
+              "value": {
+                "switch_id": "leaf2"
+              }
+            }
+          ],
+          "limit": 100,
+          "include_flows": true
+        }
+      },
+      "find_recent_flows": {
+        "endpoint": "POST /query", 
+        "data": {
+          "time_conditions": [
+            {
+              "type": "within_minutes",
+              "value": {
+                "minutes": 5
+              }
+            }
+          ],
+          "limit": 50,
+          "include_flows": true
+        }
+      },
+      "find_high_delay_flows": {
+        "endpoint": "POST /query",
+        "data": {
+          "metric_conditions": [
+            {
+              "type": "delay_gt",
+              "value": {
+                "threshold": 500
+              }
+            }
+          ],
+          "limit": 20,
+          "include_flows": true
+        }
+      }
+    },
+    "spatiotemporal_queries": {
+      "find_flows_by_logical_path": {
+        "endpoint": "POST /st-query",
+        "data": {
+          "logical_path_conditions": [
+            {
+              "type": "exact_path",
+              "value": {
+                "switches": ["spine1", "leaf2", "server3"]
+              }
+            }
+          ],
+          "limit": 100,
+          "include_flows": true
+        }
+      },
+      "find_flows_with_spatial_info": {
+        "endpoint": "POST /st-query",
+        "data": {
+          "spatial_conditions": [
+            {
+              "type": "has_spatial_info"
+            }
+          ],
+          "limit": 50,
+          "include_flows": true
+        }
+      },
+      "find_high_quality_flows": {
+        "endpoint": "POST /st-query",
+        "data": {
+          "quality_conditions": [
+            {
+              "type": "path_completeness_gt",
+              "value": {
+                "threshold": 0.95
+              }
+            },
+            {
+              "type": "temporal_continuity_gt", 
+              "value": {
+                "threshold": 0.90
+              }
+            }
+          ],
+          "limit": 30,
+          "include_flows": true
+        }
+      }
+    }
+  },
+
+  "curl_examples": {
+    "description": "Example curl commands for testing",
+    "insert_legacy_flow": "curl -X POST http://localhost:2999/flows -H 'Content-Type: application/json' -d @legacy_flow_example.json",
+    "insert_spatiotemporal_flow": "curl -X POST http://localhost:2999/st-flows -H 'Content-Type: application/json' -d @spatiotemporal_flow_example.json",
+    "query_flows": "curl -X POST http://localhost:2999/query -H 'Content-Type: application/json' -d @query_example.json",
+    "query_spatiotemporal": "curl -X POST http://localhost:2999/st-query -H 'Content-Type: application/json' -d @st_query_example.json",
+    "health_check": "curl http://localhost:2999/health",
+    "get_flow": "curl http://localhost:2999/flows/int_legacy_example_001",
+    "get_spatiotemporal_flow": "curl http://localhost:2999/st-flows/int_st_spatial_001"
+  }
+} 

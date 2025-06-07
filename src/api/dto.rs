@@ -1,12 +1,18 @@
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use crate::models::{Flow, FlowInput};
+use crate::models::{Flow, FlowInput, SpatiotemporalFlow, SpatiotemporalFlowInput, SpatialExtent};
 use crate::storage::{QueryResult, PathCondition, TimeCondition, MetricCondition};
 
-/// Flow insertion request
+/// Flow insertion request (legacy)
 #[derive(Debug, Deserialize)]
 pub struct InsertFlowRequest {
     pub flow: FlowInput,
+}
+
+/// Spatiotemporal flow insertion request (new format)
+#[derive(Debug, Deserialize)]
+pub struct InsertSpatiotemporalFlowRequest {
+    pub flow: SpatiotemporalFlowInput,
 }
 
 /// Flow insertion response
@@ -17,10 +23,16 @@ pub struct InsertFlowResponse {
     pub message: String,
 }
 
-/// Single flow response
+/// Single flow response (legacy)
 #[derive(Debug, Serialize)]
 pub struct FlowResponse {
     pub flow: Flow,
+}
+
+/// Single spatiotemporal flow response (new format)
+#[derive(Debug, Serialize)]
+pub struct SpatiotemporalFlowResponse {
+    pub flow: SpatiotemporalFlow,
 }
 
 /// Multiple flows response
@@ -30,7 +42,7 @@ pub struct FlowsResponse {
     pub count: usize,
 }
 
-/// Query request for flows
+/// Query request for flows (legacy)
 #[derive(Debug, Deserialize)]
 pub struct QueryRequest {
     /// Path-based conditions
@@ -56,7 +68,73 @@ pub struct QueryRequest {
     pub include_flows: bool,
 }
 
-/// Query response
+/// Query request for spatiotemporal flows (new format)
+#[derive(Debug, Deserialize)]
+pub struct SpatiotemporalQueryRequest {
+    /// Logical path-based conditions
+    pub logical_path_conditions: Option<Vec<PathConditionDto>>,
+    
+    /// Temporal conditions (time-based)
+    pub temporal_conditions: Option<Vec<TimeConditionDto>>,
+    
+    /// Spatial conditions (geometry-based)
+    pub spatial_conditions: Option<Vec<SpatialConditionDto>>,
+    
+    /// Quality metric conditions
+    pub quality_conditions: Option<Vec<QualityConditionDto>>,
+    
+    /// Maximum number of results
+    pub limit: Option<usize>,
+    
+    /// Number of results to skip
+    pub skip: Option<usize>,
+    
+    /// Whether to include full flow data or just IDs
+    #[serde(default)]
+    pub include_flows: bool,
+}
+
+/// Spatial condition DTO for spatiotemporal queries
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", content = "value")]
+pub enum SpatialConditionDto {
+    #[serde(rename = "within_bounds")]
+    WithinBounds { bounds: SpatialExtent },
+    
+    #[serde(rename = "intersects_region")]
+    IntersectsRegion { geometry: String }, // GeoJSON or WKT
+    
+    #[serde(rename = "near_point")]
+    NearPoint { x: f64, y: f64, radius: f64 },
+    
+    #[serde(rename = "has_spatial_info")]
+    HasSpatialInfo,
+    
+    #[serde(rename = "in_zone")]
+    InZone { zone: String },
+}
+
+/// Quality condition DTO for flow quality metrics
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", content = "value")]
+pub enum QualityConditionDto {
+    #[serde(rename = "path_completeness_gt")]
+    PathCompletenessGreaterThan { threshold: f64 },
+    
+    #[serde(rename = "spatial_coverage_gt")]
+    SpatialCoverageGreaterThan { threshold: f64 },
+    
+    #[serde(rename = "temporal_continuity_gt")]
+    TemporalContinuityGreaterThan { threshold: f64 },
+    
+    #[serde(rename = "window_count_gt")]
+    WindowCountGreaterThan { count: usize },
+    
+    #[serde(rename = "packet_count_range")]
+    PacketCountInRange { min: u64, max: u64 },
+}
+
+/// Query response (legacy)
 #[derive(Debug, Serialize)]
 pub struct QueryResponse {
     pub flow_ids: Vec<String>,
@@ -64,6 +142,15 @@ pub struct QueryResponse {
     pub total_count: usize,
     pub has_more: bool,
     pub count: usize,
+}
+
+/// Spatiotemporal query response (new format)
+#[derive(Debug, Serialize)]
+pub struct SpatiotemporalQueryResponse {
+    pub flow_ids: Vec<String>,
+    pub flows: Option<Vec<SpatiotemporalFlow>>,
+    pub total_count: usize,
+    pub limit: Option<usize>,
 }
 
 /// Path condition DTO
@@ -246,12 +333,55 @@ impl From<MetricConditionDto> for MetricCondition {
 
 impl From<QueryResult> for QueryResponse {
     fn from(result: QueryResult) -> Self {
+        let count = result.flow_ids.len();
+        let has_more = if let Some(limit) = result.limit {
+            result.total_count > limit
+        } else {
+            false
+        };
+        
         Self {
-            flow_ids: result.flow_ids.clone(),
-            flows: None, // Will be populated by handler if needed
+            flow_ids: result.flow_ids,
+            flows: None, // To be filled by handler if needed
             total_count: result.total_count,
-            has_more: result.has_more,
-            count: result.count(),
+            has_more,
+            count,
         }
     }
+}
+
+/// Grafana query request structure
+#[derive(Debug, Deserialize)]
+pub struct GrafanaQueryRequest {
+    pub range: GrafanaTimeRange,
+    pub targets: Vec<GrafanaTarget>,
+    #[serde(default)]
+    pub interval: Option<String>,
+    #[serde(default)]
+    pub max_data_points: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GrafanaTimeRange {
+    pub from: String,  // ISO 8601 timestamp
+    pub to: String,    // ISO 8601 timestamp
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GrafanaTarget {
+    pub target: String,  // Metric name like "flow_count", "avg_delay", etc.
+    #[serde(default)]
+    pub ref_id: Option<String>,
+}
+
+/// Grafana query response structure
+#[derive(Debug, Serialize)]
+pub struct GrafanaQueryResponse {
+    pub data: Vec<GrafanaTimeSeries>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GrafanaTimeSeries {
+    pub target: String,
+    pub datapoints: Vec<Vec<f64>>,  // [value, timestamp_ms]
 } 

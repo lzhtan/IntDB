@@ -1,4 +1,3 @@
-use std::collections::BTreeSet;
 use chrono::{DateTime, Utc};
 use crate::models::{Flow, NetworkPath};
 
@@ -186,22 +185,17 @@ pub struct QueryResult {
     /// Total number of matching flows (before limit/skip)
     pub total_count: usize,
     
-    /// Whether there are more results available
-    pub has_more: bool,
+    /// Applied limit
+    pub limit: Option<usize>,
 }
 
 impl QueryResult {
     /// Create a new query result
     pub fn new(flow_ids: Vec<String>, total_count: usize, limit: Option<usize>) -> Self {
-        let has_more = match limit {
-            Some(limit) => total_count > flow_ids.len(),
-            None => false,
-        };
-        
         Self {
             flow_ids,
             total_count,
-            has_more,
+            limit,
         }
     }
     

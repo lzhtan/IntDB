@@ -200,7 +200,7 @@ check_log_files() {
 run_performance_test() {
     log_info "运行性能基准测试..."
     
-    local base_url="http://localhost:3000"
+    local base_url="http://localhost:2999"
     
     # 测试健康检查响应时间
     log_info "测试健康检查响应时间..."
@@ -231,7 +231,7 @@ test_network_connectivity() {
     log_info "测试网络连通性..."
     
     local host=${1:-localhost}
-    local port=${2:-3000}
+    local port=${2:-2999}
     
     # 测试TCP连接
     if timeout 5 bash -c "</dev/tcp/$host/$port" 2>/dev/null; then
@@ -279,7 +279,7 @@ generate_report() {
         
         echo "网络监听:"
         echo "--------"
-        netstat -tuln | grep :3000 || echo "端口3000未监听"
+        netstat -tuln | grep :2999 || echo "端口2999未监听"
         echo ""
         
         echo "最近日志 (最后10行):"
@@ -299,7 +299,7 @@ main() {
     echo
     
     local host=${1:-localhost}
-    local port=${2:-3000}
+    local port=${2:-2999}
     local base_url="http://$host:$port"
     
     # 系统检查

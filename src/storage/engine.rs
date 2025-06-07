@@ -1,6 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, RwLock};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 
 use crate::models::Flow;
 use crate::storage::{PathIndex, TimeIndex, QueryBuilder, QueryResult, PathCondition, TimeCondition};

@@ -8,7 +8,7 @@ IntDB完全支持在macOS上运行，本指南详细说明如何在macOS环境�
 - **操作系统**: macOS 10.15 (Catalina) 或更高版本
 - **内存**: 512MB RAM（推荐2GB+）
 - **磁盘空间**: 100MB（编译需要额外1GB临时空间）
-- **网络**: 开放端口3000（可配置）
+- **网络**: 开放端口2999（可配置）
 
 ### 推荐配置
 - **操作系统**: macOS 12+ (Monterey)
@@ -62,7 +62,7 @@ cargo run --example api_server
 #### 5. 验证部署
 ```bash
 # 新开终端窗口，测试API
-curl http://127.0.0.1:3000/health
+curl http://127.0.0.1:2999/health
 
 # 应该返回类似：
 # {"status":"healthy","version":"0.1.0","uptime_seconds":5,"flow_count":3}
@@ -76,7 +76,7 @@ brew tap lzhtan/intdb
 brew install intdb
 
 # 启动服务
-intdb start --port 3000
+intdb start --port 2999
 ```
 
 ### 方法3：Docker运行
@@ -84,7 +84,7 @@ intdb start --port 3000
 ```bash
 # 使用Docker（需要先安装Docker Desktop for Mac）
 docker build -t intdb:latest .
-docker run -p 3000:3000 intdb:latest
+docker run -p 2999:2999 intdb:latest
 ```
 
 ## macOS特定配置
@@ -92,7 +92,7 @@ docker run -p 3000:3000 intdb:latest
 ### 1. 网络配置
 ```bash
 # 检查端口占用
-lsof -i :3000
+lsof -i :2999
 
 # 如果端口被占用，可以更改端口
 cargo run --example api_server -- --port 3001
@@ -118,34 +118,34 @@ cargo run --example api_server
 
 ### 基础健康检查
 ```bash
-curl http://127.0.0.1:3000/health
+curl http://127.0.0.1:2999/health
 ```
 
 ### 查询流数据
 ```bash
 # 获取特定流
-curl http://127.0.0.1:3000/flows/test_flow_1
+curl http://127.0.0.1:2999/flows/test_flow_1
 
 # 获取统计信息
-curl http://127.0.0.1:3000/stats
+curl http://127.0.0.1:2999/stats
 ```
 
 ### 高级查询
 ```bash
 # 路径查询
-curl -X POST http://127.0.0.1:3000/query \
+curl -X POST http://127.0.0.1:2999/query \
   -H 'Content-Type: application/json' \
   -d '{"path_conditions": [{"contains": ["s1", "s2"]}]}'
 
 # 时间范围查询
-curl -X POST http://127.0.0.1:3000/query \
+curl -X POST http://127.0.0.1:2999/query \
   -H 'Content-Type: application/json' \
   -d '{"time_conditions": [{"after": "2025-01-01T00:00:00Z"}]}'
 ```
 
 ### 数据写入
 ```bash
-curl -X POST http://127.0.0.1:3000/flows \
+curl -X POST http://127.0.0.1:2999/flows \
   -H 'Content-Type: application/json' \
   -d '{
     "flow": {
@@ -185,7 +185,7 @@ brew install htop
 htop
 
 # 监控网络连接
-netstat -an | grep :3000
+netstat -an | grep :2999
 ```
 
 ### 开发工具
@@ -195,8 +195,8 @@ brew install jq  # JSON格式化
 brew install httpie  # 更友好的HTTP客户端
 
 # 使用示例
-curl -s http://127.0.0.1:3000/health | jq .
-http GET http://127.0.0.1:3000/flows/test_flow_1
+curl -s http://127.0.0.1:2999/health | jq .
+http GET http://127.0.0.1:2999/flows/test_flow_1
 ```
 
 ## 故障排除
@@ -214,7 +214,7 @@ cargo update
 ### 运行时问题
 ```bash
 # 检查端口占用
-lsof -i :3000
+lsof -i :2999
 kill -9 <PID>  # 如果需要强制关闭
 
 # 检查系统资源
@@ -249,7 +249,7 @@ curl: (7) Failed to connect
 brew install siege
 
 # 简单压测
-siege -c 10 -t 30s http://127.0.0.1:3000/health
+siege -c 10 -t 30s http://127.0.0.1:2999/health
 
 # 复杂场景压测
 siege -c 5 -t 60s -f urls.txt
@@ -293,7 +293,7 @@ cargo run --example api_server 2>&1 | tee /var/log/intdb.log
 brew install grafana
 brew services start grafana
 
-# 访问 http://localhost:3000（注意端口冲突）
+# 访问 http://localhost:2999（注意端口冲突）
 ```
 
 ### 2. Nginx反向代理

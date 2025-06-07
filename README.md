@@ -11,6 +11,7 @@ IntDB是一个面向带内网络遥测的时空数据库。
 | **🍎 macOS部署** | [MACOS_DEPLOYMENT.md](./MACOS_DEPLOYMENT.md) | macOS环境搭建 |
 | **🐳 Docker部署** | [docker-compose.yml](./docker-compose.yml) | 容器化一键部署 |
 | **📊 性能测试** | [PerformanceTestResult.md](./PerformanceTestResult.md) | 与InfluxDB的性能对比测试 |
+| **📈 Grafana集成** | [grafana_intdb_integration.md](./grafana_intdb_integration.md) | 可视化监控仪表盘集成 |
 | **💻 API示例** | [examples/](./examples/) | 代码示例和演示 |
 
 ## 设计理念与定位
@@ -58,17 +59,177 @@ IntDB**不是**传统时序数据库的替代品，而是专门为**带内网络
 ```
 
 ### 内部存储格式
+
+#### 流记录结构 (时空数据库格式)
 ```
-Flow Record:
+Spatiotemporal Flow Record:
 ├── flow_id: "17343111536"
-├── path_hash: "sha256(s1->s2->s3)"
-├── switch_sequence: ["s1", "s2", "s3"]
-├── time_range: (start_time, end_time)
-└── hops: [
-    ├── {hop_idx: 0, switch: "s1", metrics: {...}}
-    ├── {hop_idx: 1, switch: "s2", metrics: {...}}
-    └── {hop_idx: 2, switch: "s3", metrics: {...}}
+├── spatial_metadata: {
+    ├── path_signature: "sha256(s1->s2->s3)"  // 必需：逻辑路径标识
+    ├── logical_path: ["s1", "s2", "s3"]      // 必需：逻辑交换机序列
+    ├── topology_coordinates: [               // 可选：物理拓扑坐标
+        ├── {switch: "s1", topo_x: 100, topo_y: 200, zone: "rack1"}
+        ├── {switch: "s2", topo_x: 300, topo_y: 200, zone: "rack2"}  
+        └── {switch: "s3", topo_x: 500, topo_y: 200, zone: "rack3"}
+    ] | null
+    ├── path_geometry: "LINESTRING(100 200, 300 200, 500 200)" | null  // 可选：GIS几何
+    ├── spatial_extent: {min_x: 100, min_y: 200, max_x: 500, max_y: 200} | null  // 可选
+    ├── adjacency_matrix: [[0,1,0], [1,0,1], [0,1,0]] | null  // 可选：邻接关系
+    └── has_spatial_info: true | false        // 标识：是否包含空间信息
+}
+├── temporal_metadata: {
+    ├── flow_state: "active" | "completed" | "timeout"  // 必需
+    ├── creation_time: 1640995200000          // 必需
+    ├── last_update: 1640995800000            // 必需
+    ├── window_duration: 60000                // 可选：默认60秒
+    └── retention_policy: "7d"                // 可选：默认7天
+}
+├── spatiotemporal_windows: [
+    ├── {
+        ├── st_window_id: "st_w1_1640995200_logical" | "st_w1_1640995200_100-500_200"  // 根据空间信息调整
+        ├── temporal_bounds: {start: 1640995200000, end: 1640995260000}  // 必需
+        ├── spatial_bounds: {min_x: 100, min_y: 200, max_x: 500, max_y: 200} | null  // 可选
+        ├── packet_count: 1250
+        ├── quality_metrics: {
+            ├── path_completeness: 0.98        // 必需：逻辑路径完整性
+            ├── spatial_coverage: 1.0 | null   // 可选：空间覆盖率
+            └── temporal_continuity: 0.95      // 必需：时间连续性
+        }
+        └── spatial_hops: [
+            ├── {
+                ├── logical_index: 0           // 必需：逻辑跳序号
+                ├── switch_id: "s1"            // 必需：交换机ID
+                ├── coordinates: {x: 100, y: 200, z: 0} | null  // 可选：物理坐标
+                ├── neighborhood: ["s2"] | null // 可选：邻居节点
+                ├── temporal_samples: [        // 必需：时序数据
+                    ├── {timestamp: 1640995201000, metrics: {delay: 200ns, queue: 0.8}}
+                    ├── {timestamp: 1640995202000, metrics: {delay: 250ns, queue: 0.85}}
+                    └── ...
+                ]
+                └── aggregated_metrics: {
+                    ├── avg_delay: 225ns       // 必需：基础统计
+                    ├── max_queue: 0.9         // 必需：基础统计
+                    ├── spatial_gradient: {dx_delay: 50ns/hop, dy_delay: 0ns/hop} | null  // 可选：空间梯度
+                    └── temporal_trend: "increasing"  // 必需：时间趋势
+                }
+            }
+        ]
+    }
 ]
+└── spatiotemporal_indices: {
+    ├── rtree_index: "spatial_index_id_12345" | null     // 可选：仅当有空间信息时
+    ├── temporal_btree: "time_index_id_67890"            // 必需：时间索引
+    ├── st_compound_index: "st_index_id_24680" | null    // 可选：仅当有空间信息时
+    └── logical_path_trie: "path_index_id_13579"         // 必需：逻辑路径索引
+}
+```
+
+#### 功能降级策略 (当无空间信息时)
+```
+无空间信息模式:
+├── 索引策略降级:
+    ├── 禁用 R-Tree 空间索引
+    ├── 禁用 ST-Tree 复合索引  
+    ├── 保留 B+Tree 时间索引
+    └── 保留 Trie 逻辑路径索引
+├── 查询功能降级:
+    ├── 支持: 时间范围查询、逻辑路径查询
+    ├── 支持: 跳间关联、路径完整性分析
+    ├── 不支持: 空间范围查询、邻近查询
+    └── 不支持: 空间几何分析、物理拓扑查询
+├── 存储优化:
+    ├── 空间字段置为 null，节省存储空间
+    ├── 窗口ID简化为逻辑格式
+    └── 跳过空间相关的聚合计算
+└── 后续升级路径:
+    ├── 用户可随时添加空间坐标信息
+    ├── 系统自动启用空间索引和查询
+    └── 支持渐进式功能扩展
+```
+
+#### 配置示例
+```yaml
+# 仅逻辑路径模式 (入门级配置)
+intdb_config:
+  spatial_mode: "logical_only"
+  required_fields: ["flow_id", "logical_path", "temporal_data"]
+  optional_fields: ["spatial_coordinates", "topology_info"]
+  
+# 完整时空模式 (高级配置)  
+intdb_config:
+  spatial_mode: "full_spatiotemporal"
+  topology_source: "network_discovery" | "manual_config" | "import_from_sdn"
+  coordinate_system: "datacenter_rack" | "geographic_gps" | "logical_grid"
+```
+
+#### 时空索引策略
+```
+多维索引结构:
+├── 时间维度索引 (B+ Tree):
+    ├── 主键: timestamp
+    ├── 叶节点: 指向spatiotemporal_windows
+    └── 范围查询优化: O(log n + k)
+├── 空间维度索引 (R-Tree):
+    ├── 空间范围: (min_x, min_y, max_x, max_y)
+    ├── 叶节点: 指向spatial_hops
+    └── 邻近查询优化: O(log n + k)
+├── 路径维度索引 (Trie):
+    ├── 路径前缀: s1 → s1->s2 → s1->s2->s3
+    ├── 叶节点: 指向相同路径的flows
+    └── 路径匹配查询: O(path_length)
+└── 复合时空索引 (ST-Tree):
+    ├── 同时索引时间和空间维度
+    ├── 支持时空范围查询
+    └── 最优化时空关联查询: O(log n + k)
+```
+
+#### 时空查询示例
+```sql
+-- 时空范围查询
+SELECT flow_id, avg_delay 
+FROM flows 
+WHERE spatial_bounds INTERSECTS POLYGON((100 100, 600 100, 600 300, 100 300))
+  AND temporal_bounds OVERLAPS TIMERANGE('2025-01-01T10:00:00Z', '2025-01-01T11:00:00Z')
+  AND path_contains(['s1', 's2']);
+
+-- 空间邻近查询  
+SELECT * FROM flows
+WHERE ST_Distance(path_geometry, POINT(300, 200)) < 100
+  AND timestamp > NOW() - INTERVAL '1 hour';
+
+-- 时空轨迹查询
+SELECT flow_id, ST_AsText(path_geometry), temporal_bounds
+FROM flows
+WHERE ST_Intersects(path_geometry, LINESTRING(0 0, 1000 1000))
+  ORDER BY creation_time;
+```
+
+#### 时间窗口分片策略
+```
+时间分片规则:
+├── 默认窗口大小: 60秒 (可配置)
+├── 活跃流: 保持最近3个窗口在内存
+├── 历史窗口: 压缩后存储到磁盘
+└── 窗口切换: 软切换，允许重叠缓冲
+
+内存管理:
+├── MemTable: 活跃流的当前窗口
+├── ImmutableMemTable: 正在刷盘的窗口
+└── L0-Ln SST: 分层存储历史窗口
+```
+
+#### 增量更新机制
+```
+连续遥测处理:
+├── 包到达 → 定位流和窗口 → 增量更新metrics
+├── 乱序处理 → 时间戳检查 → 插入到正确窗口
+├── 缺失检测 → 超时窗口 → 标记不完整路径
+└── 流结束 → 状态更新 → 触发压缩存储
+
+实时聚合:
+├── 滑动窗口统计: min/max/avg/p99延迟
+├── 路径质量评分: 基于丢包率和延迟
+└── 异常检测标志: 突发延迟、路径变化
 ```
 
 ### 复杂场景处理示例
@@ -210,19 +371,19 @@ curl http://127.0.0.1:3000/health
 #### 基础操作
 ```bash
 # 健康检查
-curl http://127.0.0.1:3000/health
+curl http://127.0.0.1:2999/health
 # 响应: {"status":"healthy","version":"0.1.0","uptime_seconds":5,"flow_count":3}
 
 # 获取统计信息  
-curl http://127.0.0.1:3000/stats
+curl http://127.0.0.1:2999/stats
 
 # 查询特定流
-curl http://127.0.0.1:3000/flows/test_flow_1
+curl http://127.0.0.1:2999/flows/test_flow_1
 ```
 
 #### 数据写入
 ```bash
-curl -X POST http://127.0.0.1:3000/flows \
+curl -X POST http://127.0.0.1:2999/flows \
   -H 'Content-Type: application/json' \
   -d '{
     "flow": {
@@ -246,17 +407,17 @@ curl -X POST http://127.0.0.1:3000/flows \
 #### 高级查询
 ```bash
 # 路径查询
-curl -X POST http://127.0.0.1:3000/query \
+curl -X POST http://127.0.0.1:2999/query \
   -H 'Content-Type: application/json' \
   -d '{"path_conditions": [{"contains": ["s1", "s2"]}]}'
 
 # 时间范围查询
-curl -X POST http://127.0.0.1:3000/query \
+curl -X POST http://127.0.0.1:2999/query \
   -H 'Content-Type: application/json' \
   -d '{"time_conditions": [{"after": "2025-01-01T00:00:00Z"}]}'
 
 # 复合条件查询
-curl -X POST http://127.0.0.1:3000/query \
+curl -X POST http://127.0.0.1:2999/query \
   -H 'Content-Type: application/json' \
   -d '{
     "path_conditions": [{"through_switch": "s2"}],
@@ -272,7 +433,7 @@ curl -X POST http://127.0.0.1:3000/query \
 ```toml
 # 未来版本配置示例
 [server]
-bind = "127.0.0.1:3000"  # 当前默认端口
+bind = "127.0.0.1:2999"  # 当前默认端口
 log_level = "info"
 
 [storage]
@@ -291,103 +452,3 @@ enable_adaptive_indexing = true
 max_flows = 1000000              # 当前支持：最大流数量
 auto_cleanup_hours = 24          # 当前支持：自动清理
 ```
-
-## 生态系统集成
-
-### 当前集成状态
-- ✅ **HTTP RESTful API**: 标准化接口，易于集成
-- ✅ **JSON数据格式**: 通用格式，工具链友好
-- ✅ **Docker支持**: 容器化部署，云原生兼容
-
-### 未来兼容性规划
-- 🔄 **InfluxDB Line Protocol**: 平滑迁移现有监控数据
-- 🔄 **Grafana插件**: 专门的INT数据可视化
-- 🔄 **Telegraf适配器**: 复用现有数据收集工具
-- 🔄 **Prometheus集成**: 指标暴露和监控
-
-## 性能预期
-
-| 指标 | IntDB目标 | InfluxDB基准 | 说明 |
-|------|-----------|--------------|------|
-| **路径查询延迟** | 50-200ms | 500-2000ms | 5-10倍提升 |
-| **简单查询延迟** | 50-150ms | 10-50ms | 2-5倍劣化 |
-| **写入吞吐量** | 500K-1M/sec | 800K-1.2M/sec | 基本相当 |
-| **存储效率** | 节省40-60% | 基准 | 显著优势 |
-| **内存使用** | 减少30-50% | 基准 | 路径压缩 |
-
-### 性能优势来源分析
-
-**路径查询优化原理**:
-- **索引优势**: 路径前缀树将O(n)扫描降为O(log n)查找
-- **数据局部性**: 相同路径的流聚集存储，减少磁盘I/O
-- **查询优化**: 路径谓词前置，大幅减少候选数据集
-
-**存储效率提升机制**:
-- **路径模板共享**: 相同拓扑路径只存储一次元数据
-- **跳序列压缩**: 利用网络拓扑规律性进行差分编码  
-- **时间聚合**: 批量写入时的时间戳压缩
-
-**简单查询劣化原因**:
-- **索引开销**: 维护多维索引增加查询成本
-- **数据分散**: 非路径查询可能跨多个存储分区
-- **优化偏向**: 引擎针对路径查询优化，牺牲部分通用性能
-
-## 技术栈选择
-
-- **实现语言**: Rust（完整实现，包含核心引擎和API层）
-- **存储引擎**: 自定义存储引擎，专门针对路径时序数据优化
-- **异步运行时**: Tokio（高性能异步I/O）
-- **HTTP框架**: Axum（快速、安全的Web框架）
-- **索引系统**: 多维索引（路径前缀树、时间B+树、指标范围树）
-- **序列化**: Serde（类型安全的JSON处理）
-- **查询引擎**: 路径感知的查询优化器
-
-
-## 项目状态
-
-### 🎉 IntDB v0.1.0 已发布
-
-**核心功能完成度**：
-- ✅ INT数据模型（Flow、Hop、TelemetryMetrics、NetworkPath）
-- ✅ 存储引擎（PathIndex、TimeIndex、StorageEngine）
-- ✅ 查询系统（路径查询、时间查询、指标过滤、复合查询）
-- ✅ HTTP RESTful API（健康检查、CRUD、高级查询）
-- ✅ Linux部署支持（Docker、systemd、自动安装脚本）
-- ✅ 测试验证（28个单元测试全部通过）
-
-**生产就绪性**：适用于开发和测试环境，具备完整的INT数据管理能力。
-
-## 开发贡献
-
-### 参与开发
-```bash
-# 克隆项目
-git clone https://github.com/lzhtan/IntDB.git
-cd IntDB
-
-# 运行测试
-cargo test
-
-# 启动开发服务器（包含测试数据）
-cargo run --example test_api_server
-
-# 代码检查和修复
-cargo clippy
-cargo fmt
-```
-
-### 代码贡献
-1. Fork本仓库
-2. 创建功能分支：`git checkout -b feature/your-feature`
-3. 提交代码：`git commit -am 'Add some feature'`
-4. 推送分支：`git push origin feature/your-feature`
-5. 提交Pull Request
-
-### 社区
-- 🐛 问题反馈：[GitHub Issues](https://github.com/lzhtan/IntDB/issues)
-- 💬 功能讨论：[GitHub Discussions](https://github.com/lzhtan/IntDB/discussions)
-- 📖 部署文档：[Linux部署](./LINUX_DEPLOYMENT.md) | [macOS部署](./MACOS_DEPLOYMENT.md)
-
----
-
-**IntDB：专为网络遥测设计的时空数据库。**

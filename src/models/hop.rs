@@ -67,7 +67,7 @@ impl Hop {
 }
 
 /// Input format for creating hops from JSON
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct HopInput {
     pub switch_id: String,
     pub timestamp: DateTime<Utc>,

@@ -13,7 +13,7 @@ sudo systemctl start intdb
 sudo systemctl enable intdb
 
 # 测试连接
-curl http://localhost:3000/health
+curl http://localhost:2999/health
 ```
 
 ### 方式二：Docker部署
@@ -27,7 +27,7 @@ cd intdb
 docker-compose up -d
 
 # 3. 测试连接
-curl http://localhost:3000/health
+curl http://localhost:2999/health
 ```
 
 ### 方式三：从源码编译
@@ -112,7 +112,7 @@ sudo chmod +x /opt/intdb/bin/*
 
 ```toml
 [server]
-bind = "0.0.0.0:3000"
+bind = "0.0.0.0:2999"
 workers = 4
 
 [database]
@@ -179,7 +179,7 @@ sudo systemctl start intdb
 
 ### 服务器配置
 
-- **bind**: 服务监听地址，默认`0.0.0.0:3000`
+- **bind**: 服务监听地址，默认`0.0.0.0:2999`
 - **workers**: 工作线程数，建议设置为CPU核心数
 
 ### 数据库配置
@@ -200,18 +200,18 @@ sudo systemctl start intdb
 
 **Ubuntu/Debian (UFW):**
 ```bash
-sudo ufw allow 3000/tcp comment "IntDB API"
+sudo ufw allow 2999/tcp comment "IntDB API"
 ```
 
 **CentOS/RHEL (firewalld):**
 ```bash
-sudo firewall-cmd --permanent --add-port=3000/tcp
+sudo firewall-cmd --permanent --add-port=2999/tcp
 sudo firewall-cmd --reload
 ```
 
 **通用 (iptables):**
 ```bash
-sudo iptables -A INPUT -p tcp --dport 3000 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 2999 -j ACCEPT
 ```
 
 ### Nginx反向代理
@@ -224,7 +224,7 @@ server {
     server_name your-domain.com;
     
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:2999;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -259,10 +259,10 @@ sudo journalctl -u intdb --priority=err
 
 ```bash
 # API健康检查
-curl http://localhost:3000/health
+curl http://localhost:2999/health
 
 # 性能测试
-curl -X POST http://localhost:3000/query \
+curl -X POST http://localhost:2999/query \
   -H 'Content-Type: application/json' \
   -d '{"path_conditions": [{"type": "through_switch", "value": {"switch_id": "s1"}}]}'
 ```
@@ -318,8 +318,8 @@ ls -la /opt/intdb/
 **端口被占用:**
 ```bash
 # 查看端口占用
-sudo netstat -tulpn | grep :3000
-sudo lsof -i :3000
+sudo netstat -tulpn | grep :2999
+sudo lsof -i :2999
 ```
 
 **内存不足:**

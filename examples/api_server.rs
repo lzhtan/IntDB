@@ -19,8 +19,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let app = create_router(state);
     
     // Create listener
-    let listener = TcpListener::bind("127.0.0.1:3000").await?;
-    info!("🚀 IntDB API server starting on http://127.0.0.1:3000");
+    let listener = TcpListener::bind("127.0.0.1:2999").await?;
+    info!("🚀 IntDB API server starting on http://127.0.0.1:2999");
     
     // Print available endpoints
     println!("\n📡 Available endpoints:");
@@ -34,8 +34,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("   POST /quick/path            - Flows with exact path");
     println!("   GET  /quick/recent/:minutes - Recent flows");
     println!("\n💡 Example requests:");
-    println!("   curl http://127.0.0.1:3000/health");
-    println!("   curl -X POST http://127.0.0.1:3000/flows \\");
+    println!("   curl http://127.0.0.1:2999/health");
+    println!("   curl -X POST http://127.0.0.1:2999/flows \\");
     println!("        -H 'Content-Type: application/json' \\");
     println!("        -d '{{\"flow\": {{\"path\": [\"s1\", \"s2\", \"s3\"], \"hops\": [...]}}}}'");
     

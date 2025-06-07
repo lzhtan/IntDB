@@ -127,7 +127,7 @@ sudo systemctl start intdb
 sudo systemctl status intdb
 
 # 测试API
-curl http://localhost:3000/health
+curl http://localhost:2999/health
 
 # 查看日志
 sudo journalctl -u intdb -f
@@ -170,7 +170,7 @@ sudo docker build -t intdb:latest .
 # 直接运行容器
 sudo docker run -d \
   --name intdb-server \
-  -p 3000:3000 \
+  -p 2999:2999 \
   --restart unless-stopped \
   intdb:latest
 
@@ -185,7 +185,7 @@ sudo docker-compose up -d
 sudo docker ps
 
 # 测试API
-curl http://localhost:3000/health
+curl http://localhost:2999/health
 
 # 查看容器日志
 sudo docker logs intdb-server -f
@@ -229,14 +229,14 @@ sudo chmod +x /usr/local/bin/intdb-server
 
 ```bash
 # Ubuntu/Debian (UFW)
-sudo ufw allow 3000/tcp
+sudo ufw allow 2999/tcp
 
 # CentOS/RHEL (firewalld)
-sudo firewall-cmd --permanent --add-port=3000/tcp
+sudo firewall-cmd --permanent --add-port=2999/tcp
 sudo firewall-cmd --reload
 
 # 通用iptables
-sudo iptables -A INPUT -p tcp --dport 3000 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 2999 -j ACCEPT
 ```
 
 ### 反向代理（可选）
@@ -249,7 +249,7 @@ server {
     server_name your-domain.com;
     
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:2999;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -276,8 +276,8 @@ sudo systemctl reload nginx
 
 2. **端口被占用：**
    ```bash
-   sudo netstat -tulpn | grep :3000
-   sudo lsof -i :3000
+   sudo netstat -tulpn | grep :2999
+   sudo lsof -i :2999
    ```
 
 3. **权限问题：**
@@ -298,11 +298,11 @@ sudo systemctl reload nginx
 
 ```bash
 # 健康检查
-curl http://localhost:3000/health
+curl http://localhost:2999/health
 # 预期输出: {"status":"healthy","version":"0.1.0",...}
 
 # 测试查询
-curl -X POST http://localhost:3000/query \
+curl -X POST http://localhost:2999/query \
   -H 'Content-Type: application/json' \
   -d '{"path_conditions": []}'
 # 预期输出: {"flow_ids":[],"flows":null,...}

@@ -5,7 +5,7 @@
 # =================================================================
 
 # 配置变量
-INTDB_URL="http://127.0.0.1:3000"
+INTDB_URL="http://127.0.0.1:2999"
 INFLUXDB_URL="http://127.0.0.1:8086"
 RESULTS_DIR="performance_results_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$RESULTS_DIR"

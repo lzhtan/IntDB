@@ -225,7 +225,7 @@ impl TimeIndex {
         
         let mut result = BTreeSet::new();
         
-        for (bucket_time, flows) in self.time_buckets.range(start_bucket..=end_bucket) {
+        for (_bucket_time, flows) in self.time_buckets.range(start_bucket..=end_bucket) {
             result.extend(flows.clone());
         }
         

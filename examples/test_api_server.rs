@@ -25,8 +25,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let app = create_minimal_router(state);
     
     // 启动服务器
-    let listener = TcpListener::bind("127.0.0.1:3000").await?;
-    println!("🌐 服务器启动在 http://127.0.0.1:3000");
+    let listener = TcpListener::bind("127.0.0.1:2999").await?;
+    println!("🌐 服务器启动在 http://127.0.0.1:2999");
     
     // 打印测试端点
     println!("\n📋 可用端点:");
@@ -36,11 +36,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("   POST /query           - 高级查询");
     
     println!("\n🧪 测试命令:");
-    println!("curl http://127.0.0.1:3000/health");
-    println!("curl http://127.0.0.1:3000/flows/test_flow_1");
+    println!("curl http://127.0.0.1:2999/health");
+    println!("curl http://127.0.0.1:2999/flows/test_flow_1");
     
     println!("\n⚡ 测试查询命令:");
-    println!("curl -X POST http://127.0.0.1:3000/query \\");
+    println!("curl -X POST http://127.0.0.1:2999/query \\");
     println!("  -H 'Content-Type: application/json' \\");
     println!("  -d '{{\"path_conditions\": [{{\"type\": \"through_switch\", \"value\": {{\"switch_id\": \"s2\"}}}}]}}'");
     

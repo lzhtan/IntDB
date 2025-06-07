@@ -142,7 +142,7 @@ create_config() {
 
 [server]
 # 服务器监听地址
-bind = "0.0.0.0:3000"
+bind = "0.0.0.0:2999"
 # 工作线程数
 workers = 4
 
@@ -219,14 +219,14 @@ setup_firewall() {
     
     if command -v ufw >/dev/null 2>&1; then
         # Ubuntu/Debian UFW
-        ufw allow 3000/tcp comment "IntDB API"
+        ufw allow 2999/tcp comment "IntDB API"
     elif command -v firewall-cmd >/dev/null 2>&1; then
         # CentOS/RHEL firewalld
-        firewall-cmd --permanent --add-port=3000/tcp
+        firewall-cmd --permanent --add-port=2999/tcp
         firewall-cmd --reload
     elif command -v iptables >/dev/null 2>&1; then
         # 通用iptables
-        iptables -A INPUT -p tcp --dport 3000 -j ACCEPT
+        iptables -A INPUT -p tcp --dport 2999 -j ACCEPT
         # 保存规则(根据发行版可能不同)
         if [ -f /etc/debian_version ]; then
             iptables-save > /etc/iptables/rules.v4
@@ -265,8 +265,8 @@ main() {
     echo "  开机启动: systemctl enable intdb"
     echo "  查看日志: journalctl -u intdb -f"
     echo
-    echo "🌐 访问地址: http://$(hostname -I | awk '{print $1}'):3000"
-    echo "🧪 测试命令: curl http://localhost:3000/health"
+    echo "🌐 访问地址: http://$(hostname -I | awk '{print $1}'):2999"
+    echo "🧪 测试命令: curl http://localhost:2999/health"
     echo
     echo "📁 重要路径:"
     echo "  配置文件: /etc/intdb/config.toml"

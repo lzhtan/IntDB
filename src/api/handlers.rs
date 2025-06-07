@@ -1,19 +1,25 @@
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, State, Query},
     http::StatusCode,
     Json,
 };
+use std::collections::HashMap;
 
-use crate::models::Flow;
-use crate::storage::{StorageEngine, QueryBuilder};
+use crate::models::{Flow, SpatiotemporalFlow};
+use crate::storage::{StorageEngine, QueryBuilder, TimeCondition};
 use crate::api::{
     ApiError, ApiResult,
     InsertFlowRequest, InsertFlowResponse,
     FlowResponse, FlowsResponse,
     QueryRequest, QueryResponse,
     HealthResponse, StatsResponse,
+    // New DTOs for spatiotemporal flows
+    InsertSpatiotemporalFlowRequest, SpatiotemporalFlowResponse,
+    SpatiotemporalQueryRequest, SpatiotemporalQueryResponse,
+    GrafanaQueryRequest, GrafanaQueryResponse,
+    GrafanaTimeSeries,
 };
 
 /// Application state containing the storage engine
@@ -64,7 +70,7 @@ pub async fn get_stats(State(state): State<AppState>) -> ApiResult<Json<StatsRes
     Ok(Json(response))
 }
 
-/// Insert a new flow
+/// Insert a new flow (legacy format)
 pub async fn insert_flow(
     State(state): State<AppState>,
     Json(request): Json<InsertFlowRequest>,
@@ -85,6 +91,61 @@ pub async fn insert_flow(
     Ok(Json(response))
 }
 
+/// Insert a new spatiotemporal flow (new format)
+pub async fn insert_spatiotemporal_flow(
+    State(state): State<AppState>,
+    Json(request): Json<InsertSpatiotemporalFlowRequest>,
+) -> ApiResult<Json<InsertFlowResponse>> {
+    // Convert SpatiotemporalFlowInput to SpatiotemporalFlow
+    let spatiotemporal_flow = SpatiotemporalFlow::try_from(request.flow)?;
+    let flow_id = spatiotemporal_flow.flow_id.clone();
+    
+    // Convert to legacy Flow format for storage (until storage engine is updated)
+    let legacy_flow = convert_spatiotemporal_to_legacy(spatiotemporal_flow)?;
+    
+    // Insert into storage
+    state.engine.insert_flow(legacy_flow)?;
+    
+    let response = InsertFlowResponse {
+        flow_id: flow_id.clone(),
+        status: "success".to_string(),
+        message: format!("Spatiotemporal flow {} inserted successfully", flow_id),
+    };
+    
+    Ok(Json(response))
+}
+
+/// Helper function to convert spatiotemporal flow to legacy format
+/// TODO: This is temporary until we update the storage engine
+fn convert_spatiotemporal_to_legacy(st_flow: SpatiotemporalFlow) -> Result<Flow, ApiError> {
+    if st_flow.spatiotemporal_windows.is_empty() {
+        return Err(ApiError::bad_request("No spatiotemporal windows found"));
+    }
+    
+    // Use the first window to create a legacy flow
+    let window = &st_flow.spatiotemporal_windows[0];
+    
+    let hops: Vec<crate::models::Hop> = window.spatial_hops.iter().map(|spatial_hop| {
+        // Use the first temporal sample if available
+        let (timestamp, metrics) = if let Some(sample) = spatial_hop.temporal_samples.first() {
+            (sample.timestamp, sample.metrics.clone())
+        } else {
+            // Create default values
+            (chrono::Utc::now(), crate::models::TelemetryMetrics::default())
+        };
+        
+        crate::models::Hop::new(
+            spatial_hop.logical_index,
+            spatial_hop.switch_id.clone(),
+            timestamp,
+            metrics,
+        )
+    }).collect();
+    
+    Flow::new(st_flow.flow_id, hops)
+        .map_err(|e| ApiError::bad_request(&format!("Invalid flow data: {}", e)))
+}
+
 /// Get a flow by ID
 pub async fn get_flow(
     State(state): State<AppState>,
@@ -98,7 +159,25 @@ pub async fn get_flow(
     Ok(Json(response))
 }
 
-/// Query flows
+/// Get a spatiotemporal flow by ID
+pub async fn get_spatiotemporal_flow(
+    State(state): State<AppState>,
+    Path(flow_id): Path<String>,
+) -> ApiResult<Json<SpatiotemporalFlowResponse>> {
+    let flow = state.engine.get_flow(&flow_id)
+        .ok_or_else(|| ApiError::not_found(format!("Flow {}", flow_id)))?;
+    
+    // Convert legacy flow to spatiotemporal format
+    let spatiotemporal_flow = flow.to_spatiotemporal();
+    
+    let response = SpatiotemporalFlowResponse { 
+        flow: spatiotemporal_flow 
+    };
+    
+    Ok(Json(response))
+}
+
+/// Query flows (legacy format)
 pub async fn query_flows(
     State(state): State<AppState>,
     Json(request): Json<QueryRequest>,
@@ -144,6 +223,65 @@ pub async fn query_flows(
         let flows = state.engine.get_flows(&response.flow_ids);
         response.flows = Some(flows);
     }
+    
+    Ok(Json(response))
+}
+
+/// Query spatiotemporal flows (new format)
+pub async fn query_spatiotemporal_flows(
+    State(state): State<AppState>,
+    Json(request): Json<SpatiotemporalQueryRequest>,
+) -> ApiResult<Json<SpatiotemporalQueryResponse>> {
+    // Build query from request (reuse legacy query builder for now)
+    let mut query_builder = QueryBuilder::new();
+    
+    // Add logical path conditions
+    if let Some(logical_path_conditions) = request.logical_path_conditions {
+        for condition_dto in logical_path_conditions {
+            let condition = condition_dto.into();
+            query_builder = query_builder.with_path_condition(condition);
+        }
+    }
+    
+    // Add temporal conditions
+    if let Some(temporal_conditions) = request.temporal_conditions {
+        for condition_dto in temporal_conditions {
+            let condition = condition_dto.into();
+            query_builder = query_builder.with_time_condition(condition);
+        }
+    }
+    
+    // Add spatial conditions (TODO: implement spatial query logic)
+    if request.spatial_conditions.is_some() {
+        return Err(ApiError::bad_request("Spatial queries not yet implemented"));
+    }
+    
+    // Add pagination
+    if let Some(limit) = request.limit {
+        query_builder = query_builder.limit(limit);
+    }
+    
+    if let Some(skip) = request.skip {
+        query_builder = query_builder.skip(skip);
+    }
+    
+    // Execute query
+    let query_result = state.engine.query(query_builder)?;
+    
+    // Convert flows to spatiotemporal format
+    let spatiotemporal_flows = if request.include_flows {
+        let flows = state.engine.get_flows(&query_result.flow_ids);
+        Some(flows.into_iter().map(|f| f.to_spatiotemporal()).collect())
+    } else {
+        None
+    };
+    
+    let response = SpatiotemporalQueryResponse {
+        flow_ids: query_result.flow_ids,
+        total_count: query_result.total_count,
+        limit: query_result.limit,
+        flows: spatiotemporal_flows,
+    };
     
     Ok(Json(response))
 }
@@ -210,11 +348,374 @@ pub async fn quick_query_recent(
     let query = QueryBuilder::in_last_minutes(minutes).limit(100);
     let query_result = state.engine.query(query)?;
     
-    let mut response: QueryResponse = query_result.into();
+    let response: QueryResponse = query_result.into();
+    Ok(Json(response))
+}
+
+/// Spatiotemporal-specific quick queries
+
+/// Quick query for flows in spatial region
+pub async fn quick_query_spatial_region(
+    State(_state): State<AppState>,
+    Json(_bounds): Json<crate::models::SpatialExtent>,
+) -> ApiResult<Json<SpatiotemporalQueryResponse>> {
+    // TODO: Implement spatial indexing and queries
+    Err(ApiError::bad_request("Spatial region queries not yet implemented"))
+}
+
+/// Quick query for flows with spatial information
+pub async fn quick_query_spatial_flows(
+    State(state): State<AppState>,
+) -> ApiResult<Json<SpatiotemporalQueryResponse>> {
+    // For now, return all flows and filter client-side
+    // TODO: Add spatial filtering to storage engine
+    let query = QueryBuilder::new().limit(100);
+    let query_result = state.engine.query(query)?;
     
-    // Include flow data for recent queries
-    let flows = state.engine.get_flows(&response.flow_ids);
-    response.flows = Some(flows);
+    let flows = state.engine.get_flows(&query_result.flow_ids);
+    let spatiotemporal_flows: Vec<SpatiotemporalFlow> = flows
+        .into_iter()
+        .map(|f| f.to_spatiotemporal())
+        .filter(|sf| sf.spatial_metadata.has_spatial_info)
+        .collect();
+    
+    let filtered_flow_ids: Vec<String> = spatiotemporal_flows
+        .iter()
+        .map(|sf| sf.flow_id.clone())
+        .collect();
+    
+    let response = SpatiotemporalQueryResponse {
+        flow_ids: filtered_flow_ids,
+        total_count: spatiotemporal_flows.len(),
+        limit: Some(100),
+        flows: Some(spatiotemporal_flows),
+    };
     
     Ok(Json(response))
+}
+
+/// Prometheus metrics endpoint for Grafana integration
+pub async fn prometheus_metrics(State(state): State<AppState>) -> ApiResult<String> {
+    let flow_count = state.engine.flow_count();
+    let uptime = state.start_time
+        .elapsed()
+        .map_err(|e| ApiError::internal(format!("Time error: {}", e)))?
+        .as_secs();
+    
+    // Generate Prometheus format metrics
+    let metrics = format!(
+        r#"# HELP intdb_flows_total Total number of flows stored
+# TYPE intdb_flows_total gauge
+intdb_flows_total {}
+
+# HELP intdb_uptime_seconds Service uptime in seconds
+# TYPE intdb_uptime_seconds gauge
+intdb_uptime_seconds {}
+
+# HELP intdb_memory_usage_estimate_bytes Estimated memory usage in bytes
+# TYPE intdb_memory_usage_estimate_bytes gauge
+intdb_memory_usage_estimate_bytes {}
+
+# HELP intdb_api_health Service health status (1=healthy, 0=unhealthy)
+# TYPE intdb_api_health gauge
+intdb_api_health 1
+"#,
+        flow_count,
+        uptime,
+        flow_count * 1024  // Rough memory estimate
+    );
+    
+    Ok(metrics)
+}
+
+/// Grafana-compatible query endpoint
+/// Returns time series data for network flows
+pub async fn grafana_query(
+    State(state): State<AppState>,
+    Json(request): Json<GrafanaQueryRequest>,
+) -> ApiResult<Json<GrafanaQueryResponse>> {
+    // Extract time range from request
+    let from_time = request.range.from.parse::<chrono::DateTime<chrono::Utc>>()
+        .map_err(|e| ApiError::bad_request(&format!("Invalid from time: {}", e)))?;
+    let to_time = request.range.to.parse::<chrono::DateTime<chrono::Utc>>()
+        .map_err(|e| ApiError::bad_request(&format!("Invalid to time: {}", e)))?;
+
+    // Build query based on Grafana target
+    let mut query_builder = QueryBuilder::new();
+    
+    // Add time condition
+    query_builder = query_builder.with_time_condition(
+        TimeCondition::InRange(from_time, to_time)
+    );
+    
+    // Parse target metric (e.g., "delay", "queue_util", "flow_count")
+    let target = &request.targets[0];
+    let metric_type = target.target.as_str();
+    
+    // Execute query
+    let query_result = state.engine.query(query_builder)?;
+    let flows = state.engine.get_flows(&query_result.flow_ids);
+    
+    // Convert to Grafana time series format
+    let mut datapoints = Vec::new();
+    
+    match metric_type {
+        "flow_count" => {
+            // Return flow count over time
+            let count = flows.len() as f64;
+            let timestamp = chrono::Utc::now().timestamp_millis();
+            datapoints.push(vec![count, timestamp as f64]);
+        },
+        "avg_delay" => {
+            // Calculate average delay
+            let delay_values: Vec<u64> = flows.iter()
+                .flat_map(|f| &f.hops)
+                .filter_map(|h| h.metrics.delay_ns)
+                .collect();
+            
+            if !delay_values.is_empty() {
+                let avg_delay = delay_values.iter().sum::<u64>() as f64 / delay_values.len() as f64;
+                let timestamp = chrono::Utc::now().timestamp_millis();
+                datapoints.push(vec![avg_delay, timestamp as f64]);
+            }
+        },
+        "avg_queue_util" => {
+            // Calculate average queue utilization
+            let queue_values: Vec<f64> = flows.iter()
+                .flat_map(|f| &f.hops)
+                .filter_map(|h| h.metrics.queue_util)
+                .collect();
+            
+            if !queue_values.is_empty() {
+                let avg_queue = queue_values.iter().sum::<f64>() / queue_values.len() as f64;
+                let timestamp = chrono::Utc::now().timestamp_millis();
+                datapoints.push(vec![avg_queue, timestamp as f64]);
+            }
+        },
+        _ => {
+            return Err(ApiError::bad_request(&format!("Unknown metric: {}", metric_type)));
+        }
+    }
+    
+    let response = GrafanaQueryResponse {
+        data: vec![GrafanaTimeSeries {
+            target: target.target.clone(),
+            datapoints,
+        }],
+    };
+    
+    Ok(Json(response))
+}
+
+/// Standard Prometheus API query endpoint
+/// This is what Grafana actually calls when configured as a Prometheus data source
+pub async fn prometheus_query(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let query = params.get("query").unwrap_or(&"".to_string()).clone();
+    
+    // Get real-time data from the storage engine
+    let flow_count = state.engine.flow_count();
+    let uptime = state.start_time
+        .elapsed()
+        .map_err(|e| ApiError::internal(format!("Time error: {}", e)))?
+        .as_secs();
+    
+    // Parse basic Prometheus queries and return real data
+    match query.as_str() {
+        "intdb_flows_total" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_flows_total"},
+                            "value": [chrono::Utc::now().timestamp(), flow_count.to_string()]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_uptime_seconds" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_uptime_seconds"},
+                            "value": [chrono::Utc::now().timestamp(), uptime.to_string()]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_memory_usage_estimate_bytes" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_memory_usage_estimate_bytes"},
+                            "value": [chrono::Utc::now().timestamp(), (flow_count * 1024).to_string()]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_api_health" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_api_health"},
+                            "value": [chrono::Utc::now().timestamp(), "1"]
+                        }
+                    ]
+                }
+            })))
+        },
+        _ => {
+            // Return empty result for unknown queries
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": []
+                }
+            })))
+        }
+    }
+}
+
+/// Prometheus range query endpoint
+pub async fn prometheus_query_range(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let query = params.get("query").unwrap_or(&"".to_string()).clone();
+    
+    // Get real-time data from the storage engine
+    let flow_count = state.engine.flow_count();
+    let uptime = state.start_time
+        .elapsed()
+        .map_err(|e| ApiError::internal(format!("Time error: {}", e)))?
+        .as_secs();
+    
+    // Generate time series data for the range query
+    let current_timestamp = chrono::Utc::now().timestamp();
+    
+    match query.as_str() {
+        "intdb_flows_total" => {
+            // Create a simple time series with current value
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "matrix",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_flows_total"},
+                            "values": [
+                                [current_timestamp - 60, flow_count.to_string()],
+                                [current_timestamp, flow_count.to_string()]
+                            ]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_uptime_seconds" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "matrix",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_uptime_seconds"},
+                            "values": [
+                                [current_timestamp - 60, (uptime - 60).to_string()],
+                                [current_timestamp, uptime.to_string()]
+                            ]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_memory_usage_estimate_bytes" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "matrix",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_memory_usage_estimate_bytes"},
+                            "values": [
+                                [current_timestamp - 60, (flow_count * 1024).to_string()],
+                                [current_timestamp, (flow_count * 1024).to_string()]
+                            ]
+                        }
+                    ]
+                }
+            })))
+        },
+        "intdb_api_health" => {
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "matrix",
+                    "result": [
+                        {
+                            "metric": {"__name__": "intdb_api_health"},
+                            "values": [
+                                [current_timestamp - 60, "1"],
+                                [current_timestamp, "1"]
+                            ]
+                        }
+                    ]
+                }
+            })))
+        },
+        _ => {
+            // Return empty result for unknown queries
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "matrix",
+                    "result": []
+                }
+            })))
+        }
+    }
+}
+
+/// Prometheus label values endpoint
+pub async fn prometheus_label_values(
+    State(_state): State<AppState>,
+) -> ApiResult<Json<serde_json::Value>> {
+    // Return available metric names
+    Ok(Json(serde_json::json!({
+        "status": "success",
+        "data": [
+            "intdb_flows_total",
+            "intdb_uptime_seconds", 
+            "intdb_memory_usage_estimate_bytes",
+            "intdb_api_health"
+        ]
+    })))
+}
+
+/// Prometheus labels endpoint
+pub async fn prometheus_labels(
+    State(_state): State<AppState>,
+) -> ApiResult<Json<serde_json::Value>> {
+    // Return available label names
+    Ok(Json(serde_json::json!({
+        "status": "success",
+        "data": ["__name__"]
+    })))
 } 
