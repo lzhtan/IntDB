@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::models::{Flow, SpatiotemporalFlow};
 use crate::storage::{StorageEngine, QueryBuilder, TimeCondition};
@@ -402,6 +402,59 @@ pub async fn prometheus_metrics(State(state): State<AppState>) -> ApiResult<Stri
         .map_err(|e| ApiError::internal(format!("Time error: {}", e)))?
         .as_secs();
     
+    // Get detailed network statistics
+    let mut query_builder = QueryBuilder::new();
+    let query_result = state.engine.query(query_builder)?;
+    let flows = state.engine.get_flows(&query_result.flow_ids);
+    
+    // Calculate network metrics
+    let delay_values: Vec<u64> = flows.iter()
+        .flat_map(|f| &f.hops)
+        .filter_map(|h| h.metrics.delay_ns)
+        .collect();
+    
+    let queue_values: Vec<f64> = flows.iter()
+        .flat_map(|f| &f.hops)
+        .filter_map(|h| h.metrics.queue_util)
+        .collect();
+    
+    let unique_switches: std::collections::HashSet<_> = flows.iter()
+        .flat_map(|f| &f.hops)
+        .map(|h| &h.switch_id)
+        .collect();
+    
+    let unique_paths: std::collections::HashSet<_> = flows.iter()
+        .map(|f| &f.path.switches)
+        .collect();
+    
+    // Calculate statistics
+    let avg_delay = if !delay_values.is_empty() {
+        delay_values.iter().sum::<u64>() as f64 / delay_values.len() as f64
+    } else { 0.0 };
+    
+    let max_delay = delay_values.iter().max().unwrap_or(&0).clone() as f64;
+    
+    let avg_queue_util = if !queue_values.is_empty() {
+        queue_values.iter().sum::<f64>() / queue_values.len() as f64
+    } else { 0.0 };
+    
+    let max_queue_util = queue_values.iter().fold(0.0f64, |a, &b| a.max(b));
+    
+    let congested_hops = queue_values.iter().filter(|&&x| x > 0.8).count();
+    let congestion_ratio = if !queue_values.is_empty() {
+        congested_hops as f64 / queue_values.len() as f64
+    } else { 0.0 };
+    
+    let avg_path_length = if !flows.is_empty() {
+        flows.iter().map(|f| f.hops.len()).sum::<usize>() as f64 / flows.len() as f64
+    } else { 0.0 };
+    
+    // Count flows by status
+    use crate::models::flow::FlowStatus;
+    let active_flows = flows.iter().filter(|f| matches!(f.status, FlowStatus::Partial)).count();
+    let complete_flows = flows.iter().filter(|f| matches!(f.status, FlowStatus::Complete)).count();
+    let timeout_flows = flows.iter().filter(|f| matches!(f.status, FlowStatus::Timeout)).count();
+    
     // Generate Prometheus format metrics
     let metrics = format!(
         r#"# HELP intdb_flows_total Total number of flows stored
@@ -419,10 +472,65 @@ intdb_memory_usage_estimate_bytes {}
 # HELP intdb_api_health Service health status (1=healthy, 0=unhealthy)
 # TYPE intdb_api_health gauge
 intdb_api_health 1
+
+# HELP intdb_avg_delay_ns Average network delay in nanoseconds
+# TYPE intdb_avg_delay_ns gauge
+intdb_avg_delay_ns {}
+
+# HELP intdb_max_delay_ns Maximum network delay in nanoseconds
+# TYPE intdb_max_delay_ns gauge
+intdb_max_delay_ns {}
+
+# HELP intdb_avg_queue_utilization Average queue utilization ratio (0-1)
+# TYPE intdb_avg_queue_utilization gauge
+intdb_avg_queue_utilization {}
+
+# HELP intdb_max_queue_utilization Maximum queue utilization ratio (0-1)
+# TYPE intdb_max_queue_utilization gauge
+intdb_max_queue_utilization {}
+
+# HELP intdb_queue_congestion_ratio Ratio of congested hops (queue > 80%)
+# TYPE intdb_queue_congestion_ratio gauge
+intdb_queue_congestion_ratio {}
+
+# HELP intdb_unique_switches Number of unique switches in the network
+# TYPE intdb_unique_switches gauge
+intdb_unique_switches {}
+
+# HELP intdb_unique_paths Number of unique network paths
+# TYPE intdb_unique_paths gauge
+intdb_unique_paths {}
+
+# HELP intdb_avg_path_length Average path length (number of hops)
+# TYPE intdb_avg_path_length gauge
+intdb_avg_path_length {}
+
+# HELP intdb_flows_active Number of active flows
+# TYPE intdb_flows_active gauge
+intdb_flows_active {}
+
+# HELP intdb_flows_complete Number of completed flows
+# TYPE intdb_flows_complete gauge
+intdb_flows_complete {}
+
+# HELP intdb_flows_timeout Number of timed-out flows
+# TYPE intdb_flows_timeout gauge
+intdb_flows_timeout {}
 "#,
         flow_count,
         uptime,
-        flow_count * 1024  // Rough memory estimate
+        flow_count * 1024,  // Rough memory estimate
+        avg_delay,
+        max_delay,
+        avg_queue_util,
+        max_queue_util,
+        congestion_ratio,
+        unique_switches.len(),
+        unique_paths.len(),
+        avg_path_length,
+        active_flows,
+        complete_flows,
+        timeout_flows
     );
     
     Ok(metrics)
