@@ -1,6 +1,8 @@
 # IntDB
 IntDB是一个面向带内网络遥测的时空数据库。
 
+> 🎬 **项目演示视频**：[IntDB介绍视频](https://www.bilibili.com/video/BV1PpT2zzELD/)
+
 > 🚀 **快速部署**：[Linux服务器部署](./LINUX_DEPLOYMENT.md) | [macOS本地开发](./MACOS_DEPLOYMENT.md)
 
 ## 📖 文档导航
@@ -16,7 +18,7 @@ IntDB是一个面向带内网络遥测的时空数据库。
 
 ## 设计理念与定位
 
-IntDB**不是**传统时序数据库的替代品，而是专门为**带内网络遥测**场景设计的时空数据库。我们的核心理念是：
+IntDB**不是**传统时序数据库的替代品，而是专门为**带内网络遥测**场景设计的时空数据库。
 
 ### 与InfluxDB的关系：互补而非竞争
 
