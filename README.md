@@ -430,24 +430,39 @@ curl -X POST http://127.0.0.1:2999/query \
 
 **使用遥测数据生成器**:
 
-IntDB提供了遥测数据生成器，可以持续生成真实的网络遥测数据用于测试和演示：
+IntDB提供了多种数据生成和测试工具：
 
 ```bash
 # 1. 确保IntDB服务运行
 ./target/release/intdb &
 
-# 2. 启动遥测数据生成器
+# 2. 实时遥测数据生成器 - 持续生成数据
 python3 telemetry_generator.py
+
+# 3. 批量性能测试工具 - 生成大量数据进行性能测试
+python3 batch_telemetry_generator.py --records 1000 --iterations 10
 ```
 
-生成器特性：
+#### 工具特性对比
+
+**实时遥测生成器 (`telemetry_generator.py`)**:
 - 🔄 **持续数据生成**: 每秒生成一次遥测测量数据
 - 📊 **固定网络路径**: s1 → s2 → s3 → s4 (4跳路径)
 - 📈 **真实指标变化**: 队列利用率和延迟随时间动态变化
 - ✅ **数据追加机制**: 所有测量数据追加到同一流中，不会覆盖
 - 📱 **实时状态显示**: 显示每个交换机的当前队列利用率和延迟
 
-生成器输出示例：
+**批量性能测试工具 (`batch_telemetry_generator.py`)**:
+- 🚀 **大规模数据生成**: 快速生成指定数量的网络流记录
+- 📊 **多样化网络拓扑**: 4个spine交换机 + 8个leaf交换机 + 32个服务器
+- ⚡ **性能基准测试**: 对IntDB和InfluxDB进行写入性能对比
+- 🔍 **查询性能验证**: 路径模式匹配、路径聚合等复杂查询测试
+- 📈 **统计分析**: 自动计算响应时间、成功率、P95延迟等关键指标
+- 📋 **报告生成**: 生成JSON和Markdown格式的详细性能报告
+
+#### 输出示例
+
+**实时遥测生成器输出**:
 ```
 ============================================================
   IntDB Telemetry Data Generator Started
@@ -460,3 +475,24 @@ Press Ctrl+C to stop
 [10:15:23] s1: q=0.12 d=145ns | s2: q=0.34 d=268ns | s3: q=0.56 d=412ns | s4: q=0.23 d=198ns ✅
 [10:15:24] s1: q=0.15 d=156ns | s2: q=0.38 d=278ns | s3: q=0.52 d=398ns | s4: q=0.27 d=208ns ✅
 ```
+
+**批量性能测试工具输出**:
+```bash
+# 基本使用
+python3 batch_telemetry_generator.py --records 1000 --iterations 10
+
+# 完整性能对比测试
+python3 batch_telemetry_generator.py --records 5000 --iterations 20
+
+# 仅生成数据不查询
+python3 batch_telemetry_generator.py --data-only --records 1000
+
+# 仅执行查询测试
+python3 batch_telemetry_generator.py --query-only --iterations 5
+```
+
+输出包含：
+- 📊 **写入性能统计**: 成功率、吞吐量、平均响应时间
+- 🔍 **查询性能对比**: IntDB vs InfluxDB各类查询的响应时间
+- 📈 **性能提升指标**: 具体的性能改进百分比
+- 📋 **详细报告**: 自动生成`performance_test_report_[timestamp].json`和`.md`文件
