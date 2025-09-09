@@ -451,9 +451,7 @@ python3 batch_telemetry_generator.py --records 1000 --iterations 10
 **实时遥测生成器 (`telemetry_generator.py`)**:
 - 🔄 **持续数据生成**: 每秒生成一次遥测测量数据
 - 📊 **固定网络路径**: s1 → s2 → s3 → s4 (4跳路径)
-- 📈 **真实指标变化**: 队列利用率和延迟随时间动态变化
-- ✅ **数据追加机制**: 所有测量数据追加到同一流中，不会覆盖
-- 📱 **实时状态显示**: 显示每个交换机的当前队列利用率和延迟
+- 📱 **实时遥测状态**: 显示每个交换机的当前队列利用率和延迟
 
 **批量性能测试工具 (`batch_telemetry_generator.py`)**:
 - 🚀 **大规模数据生成**: 快速生成指定数量的网络流记录
@@ -461,7 +459,6 @@ python3 batch_telemetry_generator.py --records 1000 --iterations 10
 - ⚡ **性能基准测试**: 对IntDB和InfluxDB进行写入性能对比
 - 🔍 **查询性能验证**: 路径模式匹配、路径聚合等复杂查询测试
 - 📈 **统计分析**: 自动计算响应时间、成功率、P95延迟等关键指标
-- 📋 **报告生成**: 生成JSON和Markdown格式的详细性能报告
 
 #### 输出示例
 
@@ -497,5 +494,4 @@ python3 batch_telemetry_generator.py --query-only --iterations 5
 输出包含：
 - 📊 **写入性能统计**: 成功率、吞吐量、平均响应时间
 - 🔍 **查询性能对比**: IntDB vs InfluxDB各类查询的响应时间
-- 📈 **性能提升指标**: 具体的性能改进百分比
 - 📋 **详细报告**: 自动生成`performance_test_report_[timestamp].json`和`.md`文件
